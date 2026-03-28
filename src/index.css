@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 170 15% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 170 15% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 170 15% 12%;
+
+    --primary: 14 98% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --brand-orange: 14 98% 60%;
+    --brand-orange-foreground: 0 0% 100%;
+
+    --secondary: 170 22% 95%;
+    --secondary-foreground: 170 15% 12%;
+
+    --muted: 170 20% 95%;
+    --muted-foreground: 170 12% 46%;
+
+    --accent: 170 22% 95%;
+    --accent-foreground: 170 15% 12%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 170 10% 89%;
+    --input: 170 10% 89%;
+    --ring: 14 98% 60%;
+
+    --radius: 0.625rem;
+
+    /* Landing page surface colors */
+    --surface-mint: 170 25% 94%;
+    --surface-mint-strong: 170 32% 82%;
+    --teal-data: 170 50% 45%;
+    --teal-dark: 170 15% 15%;
+
+    /* Pipeline stage colors */
+    --stage-prospect: 210 70% 55%;
+    --stage-qualified: 262 60% 55%;
+    --stage-proposal: 14 98% 60%;
+    --stage-negotiation: 40 85% 52%;
+    --stage-won: 170 50% 45%;
+    --stage-lost: 0 65% 50%;
+
+    /* Sidebar — mint surface with dark text */
+    --sidebar-background: 170 25% 94%;
+    --sidebar-foreground: 170 15% 12%;
+    --sidebar-primary: 14 98% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 170 20% 88%;
+    --sidebar-accent-foreground: 170 15% 12%;
+    --sidebar-border: 170 15% 88%;
+    --sidebar-ring: 14 98% 60%;
+  }
+
+  .dark {
+    --background: 170 12% 7%;
+    --foreground: 170 10% 93%;
+
+    --card: 170 10% 11%;
+    --card-foreground: 170 10% 93%;
+
+    --popover: 170 10% 11%;
+    --popover-foreground: 170 10% 93%;
+
+    --primary: 14 98% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --brand-orange: 14 98% 65%;
+    --brand-orange-foreground: 0 0% 100%;
+
+    --secondary: 170 8% 16%;
+    --secondary-foreground: 170 10% 93%;
+
+    --muted: 170 8% 16%;
+    --muted-foreground: 170 6% 50%;
+
+    --accent: 170 8% 16%;
+    --accent-foreground: 170 10% 93%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 170 8% 18%;
+    --input: 170 8% 18%;
+    --ring: 14 98% 65%;
+
+    --surface-mint: 170 10% 14%;
+    --surface-mint-strong: 170 12% 20%;
+    --teal-data: 170 50% 50%;
+    --teal-dark: 170 15% 80%;
+
+    --sidebar-background: 170 10% 11%;
+    --sidebar-foreground: 170 8% 82%;
+    --sidebar-primary: 14 98% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 170 10% 16%;
+    --sidebar-accent-foreground: 170 8% 82%;
+    --sidebar-border: 170 8% 16%;
+    --sidebar-ring: 14 98% 65%;
+  }
+}
+
+/* Force light theme on landing page regardless of dark mode */
+.force-light {
+  --background: 150 20% 95%;
+  --foreground: 180 10% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 180 10% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 180 10% 10%;
+  --primary: 14 98% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 170 14% 90%;
+  --secondary-foreground: 170 15% 12%;
+  --muted: 170 12% 90%;
+  --muted-foreground: 170 8% 46%;
+  --accent: 170 14% 90%;
+  --accent-foreground: 170 15% 12%;
+  --border: 170 10% 86%;
+  --input: 170 10% 86%;
+  --ring: 14 98% 60%;
+  --surface-mint: 170 25% 94%;
+  --surface-mint-strong: 170 32% 82%;
+  --teal-data: 170 50% 45%;
+  --teal-dark: 170 15% 15%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Outfit', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
