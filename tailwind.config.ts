@@ -13,10 +13,6 @@ export default {
       },
     },
     extend: {
-      fontFamily: {
-        sans: ["Outfit", "sans-serif"],
-        display: ["Outfit", "sans-serif"],
-      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -61,33 +57,29 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        stage: {
-          prospect: "hsl(var(--stage-prospect))",
-          qualified: "hsl(var(--stage-qualified))",
-          proposal: "hsl(var(--stage-proposal))",
-          negotiation: "hsl(var(--stage-negotiation))",
-          won: "hsl(var(--stage-won))",
-          lost: "hsl(var(--stage-lost))",
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
         },
-        "surface-mint": {
-          DEFAULT: "hsl(var(--surface-mint))",
-          strong: "hsl(var(--surface-mint-strong))",
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
         },
-        "teal-data": "hsl(var(--teal-data))",
-        "teal-dark": "hsl(var(--teal-dark))",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
       },
       keyframes: {
         "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
+      from: { height: "0" },
+          to: { height: "var(--radix-collapsible-content-height)" },
         },
         "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
+  from: { height: "var(--radix-collapsible-content-height)" },
           to: { height: "0" },
         },
       },

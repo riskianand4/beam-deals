@@ -1,52 +1,62 @@
-import { useState } from "react";
-import { Navigate, Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { AppSidebar } from "@/components/AppSidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { useOnboardingStatus } from "@/hooks/useOnboardingStatus";
-import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "./AppSidebar";
-import { GlobalSearch } from "./GlobalSearch";
-import { ThemeToggle } from "./ThemeToggle";
-import { NotificationCenter } from "./NotificationCenter";
-import { Loader2 } from "lucide-react";
+import { useSidebarContext } from "@/contexts/SidebarContext";
+import { Calendar } from "lucide-react";
+import { format } from "date-fns";
+import { id as localeID } from "date-fns/locale";
+import NotificationDropdown from "@/components/NotificationDropdown";
+import UserDropdown from "@/components/UserDropdown";
+import CommandPalette from "@/components/CommandPalette";
+import OnboardingGuide from "@/components/OnboardingGuide";
+import FocusTimer from "@/components/FocusTimer";
 
-export function AppLayout() {
-  const { session, loading } = useAuth();
-  const { data: onboardingStatus, isLoading: onboardingLoading } = useOnboardingStatus();
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+const AppLayout = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+  const { collapsed } = useSidebarContext();
 
-  if (loading || onboardingLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!session) return <Navigate to="/auth" replace />;
-
-  if (onboardingStatus?.needsOnboarding && !onboardingDismissed) {
-    return <OnboardingWizard onComplete={() => setOnboardingDismissed(true)} />;
-  }
+  const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "Selamat pagi";
+    if (h < 17) return "Selamat siang";
+    return "Selamat sore";
+  };
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <AppSidebar />
-        <main className="flex-1 overflow-auto">
-          <div className="flex items-center gap-2 px-4 py-3">
-            <SidebarTrigger />
-            <div className="ml-auto flex items-center gap-2">
-              <GlobalSearch />
-              <NotificationCenter />
-              <ThemeToggle />
+    <div className="flex min-h-screen w-full bg-background">
+      <AppSidebar />
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${collapsed ? "ml-16" : "ml-56"}`}>
+        {/* Minimal header */}
+        <header className="h-14 flex items-center justify-between px-6 border-b border-border bg-card/60 backdrop-blur-sm sticky top-0 z-30">
+          <div>
+            <h1 className="text-sm font-semibold text-foreground">
+              {greeting()}, {user?.name?.split(" ")[0]}
+            </h1>
+            <p className="text-[11px] text-muted-foreground">
+              Cek asset anda di dashboard
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <FocusTimer />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">
+                {format(new Date(), "HH:mm", { locale: localeID })}
+              </span>
             </div>
+            <NotificationDropdown />
+            <UserDropdown />
           </div>
-          <div className="p-4 md:p-6">
-            <Outlet />
-          </div>
+        </header>
+        <main className="flex-1 p-4 sm:p-6 bg-background">
+          <Outlet />
         </main>
       </div>
-    </SidebarProvider>
+      <CommandPalette />
+      <OnboardingGuide />
+    </div>
   );
-}
+};
+
+export default AppLayout;
