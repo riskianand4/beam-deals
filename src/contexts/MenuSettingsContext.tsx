@@ -11,8 +11,11 @@ export interface MenuSettings {
   team: boolean;
   notes: boolean;
   reports: boolean;
+  tasks: boolean;
   approve: boolean;
   viewApproval: boolean;
+  mitra: boolean;
+  explorer: boolean;
 }
 
 const DEFAULT_SETTINGS: MenuSettings = {
@@ -24,8 +27,11 @@ const DEFAULT_SETTINGS: MenuSettings = {
   team: false,
   notes: false,
   reports: false,
+  tasks: false,
   approve: false,
   viewApproval: false,
+  mitra: false,
+  explorer: false,
 };
 
 interface MenuSettingsContextType {

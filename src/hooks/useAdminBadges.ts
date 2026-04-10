@@ -47,7 +47,7 @@ export function useAdminBadges(): AdminBadges {
     const pendingReimb = reimbursements.filter((r) => r.status === "pending");
     const pendingCash = cashAdvances.filter((c) => c.status === "pending");
     const pendingLeave = leaveRequests.filter((l) => l.status === "pending");
-    const reviewTasks = tasks.filter((t) => t.status === "needs-review");
+    const reviewTasks = tasks.filter((t) => t.status === "todo");
     const unreadMsgs = messages.filter(
       (m) => m.toUserId === user.id && m.status === "pending"
     );

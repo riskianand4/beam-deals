@@ -22,10 +22,6 @@ const EmployeeGrid = ({ basePath, badgeCounts }: EmployeeGridProps) => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Pilih karyawan untuk mengelola data</p>
-        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-          <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="w-7 h-7" onClick={() => setViewMode("grid")}><LayoutGrid className="w-3.5 h-3.5" /></Button>
-          <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="w-7 h-7" onClick={() => setViewMode("list")}><List className="w-3.5 h-3.5" /></Button>
-        </div>
       </div>
 
       {viewMode === "grid" ? (
@@ -56,7 +52,7 @@ const EmployeeGrid = ({ basePath, badgeCounts }: EmployeeGridProps) => {
             return (
               <motion.div key={emp.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }} onClick={() => navigate(`${basePath}/${emp.id}`)} className="ms-card-hover flex items-center gap-3 p-3 cursor-pointer">
                 <div className="relative shrink-0">
-                  <Avatar className="w-14 h-14">{emp.avatar && <AvatarImage src={emp.avatar} alt={emp.name} />}<AvatarFallback className="bg-primary text-sm font-semibold">{initials}</AvatarFallback></Avatar>
+                  <Avatar className="w-14 h-14">{emp.avatar && <AvatarImage src={emp.avatar} alt={emp.name} />}<AvatarFallback className="bg-primary text-white dark:text-muted-foreground text-sm font-semibold">{initials}</AvatarFallback></Avatar>
                   {badge > 0 && (<span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-destructive text-destructive-foreground rounded-full text-[9px] font-bold flex items-center justify-center shadow-sm">{badge}</span>)}
                 </div>
                 <div className="min-w-0 flex-1">

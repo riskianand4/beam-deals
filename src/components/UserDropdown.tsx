@@ -33,12 +33,15 @@ const UserDropdown = () => {
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-foreground">{user?.name}</p>
             <p className="text-xs text-muted-foreground">{user?.email}</p>
-            <Badge variant="secondary" className=" bg-primary w-fit hover:bg-primary/70 capitalize text-[10px] mt-1">
+            <Badge variant="secondary" className="bg-primary text-primary-foreground w-fit hover:bg-primary/70 capitalize text-[10px] mt-1">
               {user?.role === "admin" ? "Admin" : "Karyawan"}
             </Badge>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate("/profile")} className="gap-2 cursor-pointer">
+          <User className="w-4 h-4" /> Profil
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate("/settings")} className="gap-2 cursor-pointer">
           <Settings className="w-4 h-4" /> Pengaturan
         </DropdownMenuItem>

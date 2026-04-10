@@ -3,6 +3,8 @@ const Activity = require("../models/Activity");
 const Notification = require("../models/Notification");
 const TeamGroup = require("../models/TeamGroup");
 const User = require("../models/User");
+const PositionAccess = require("../models/PositionAccess");
+const notificationService = require("./notificationService");
 
 const getUsersByIds = async (userIds = []) => {
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
@@ -15,6 +17,14 @@ const getUsersWithPreference = async (userIds = [], preferenceKey) => {
   return users.filter((user) => user.notificationSettings?.[preferenceKey] !== false);
 };
 
+const hasTasksAccess = async (user) => {
+  if (user.role === "admin") return true;
+  const position = user.position || "";
+  if (!position) return false;
+  const pa = await PositionAccess.findOne({ position });
+  return pa?.menus?.tasks === true;
+};
+
 exports.getAll = async (query = {}, requestUser = null) => {
   const filter = {};
   if (query.assigneeId) filter.assigneeId = query.assigneeId;
@@ -25,12 +35,19 @@ exports.getAll = async (query = {}, requestUser = null) => {
 
   if (requestUser && requestUser.role !== "admin") {
     const userId = requestUser.id;
+    const user = await User.findById(userId);
+    const hasAccess = user ? await hasTasksAccess(user) : false;
+    
+    // If user has tasks access, show all tasks (like admin)
+    if (hasAccess) {
+      return Task.find(filter).sort({ createdAt: -1 });
+    }
+
     const teams = await TeamGroup.find({ $or: [{ memberIds: userId }, { leaderId: userId }] });
     const teamIds = teams.map((team) => team._id.toString());
 
     const accessConditions = [
       { type: "personal", assigneeId: userId },
-      { "reviewers.userId": userId },
     ];
     if (teamIds.length > 0) {
       accessConditions.push({ type: "team", teamId: { $in: teamIds } });
@@ -58,16 +75,26 @@ exports.create = async (data, requestUser) => {
   const userId = requestUser?.id;
 
   if (role !== "admin") {
-    const leaderTeams = await TeamGroup.find({ leaderId: userId });
-    if (leaderTeams.length === 0) {
-      throw Object.assign(new Error("Hanya admin dan ketua tim yang bisa membuat tugas"), { statusCode: 403 });
-    }
-    if (data.type !== "team") {
-      throw Object.assign(new Error("Ketua tim hanya bisa membuat tugas tim"), { statusCode: 403 });
-    }
-    const leaderTeamIds = leaderTeams.map((t) => t._id.toString());
-    if (!data.teamId || !leaderTeamIds.includes(data.teamId)) {
-      throw Object.assign(new Error("Anda hanya bisa membuat tugas untuk tim yang Anda pimpin"), { statusCode: 403 });
+    // Check if user has tasks access via position
+    const user = await User.findById(userId);
+    const hasAccess = user ? await hasTasksAccess(user) : false;
+    
+    if (hasAccess) {
+      // User with tasks access can create like admin
+      // but validate team/personal requirements
+    } else {
+      // Only leaders can create team tasks
+      const leaderTeams = await TeamGroup.find({ leaderId: userId });
+      if (leaderTeams.length === 0) {
+        throw Object.assign(new Error("Hanya admin dan ketua tim yang bisa membuat tugas"), { statusCode: 403 });
+      }
+      if (data.type !== "team") {
+        throw Object.assign(new Error("Ketua tim hanya bisa membuat tugas tim"), { statusCode: 403 });
+      }
+      const leaderTeamIds = leaderTeams.map((t) => t._id.toString());
+      if (!data.teamId || !leaderTeamIds.includes(data.teamId)) {
+        throw Object.assign(new Error("Anda hanya bisa membuat tugas untuk tim yang Anda pimpin"), { statusCode: 403 });
+      }
     }
   }
 
@@ -98,20 +125,22 @@ exports.create = async (data, requestUser) => {
     if (team) {
       const recipientIds = [...new Set([...(team.memberIds || []), team.leaderId].filter((id) => id && id !== data.createdBy))];
       const recipients = await getUsersWithPreference(recipientIds, "teamUpdates");
-      await Promise.all(recipients.map((recipient) => Notification.create({
+      await Promise.all(recipients.map((recipient) => notificationService.create({
         userId: recipient._id.toString(),
-        title: "Tugas Tim Baru",
-        message: `Tugas tim baru: ${task.title}`,
+        title: "Tugas Team Baru",
+        message: `Tugas team baru: ${task.title}`,
         type: "info",
+        category: "task",
       })));
     }
   } else if (data.assigneeId) {
     const recipients = await getUsersWithPreference([data.assigneeId], "taskAssignments");
-    await Promise.all(recipients.map((recipient) => Notification.create({
+    await Promise.all(recipients.map((recipient) => notificationService.create({
       userId: recipient._id.toString(),
       title: "Tugas Baru",
       message: `Anda mendapat tugas baru: ${task.title}`,
       type: "info",
+      category: "task",
     })));
   }
 
@@ -124,7 +153,7 @@ exports.update = async (id, data) => {
   return task;
 };
 
-exports.updateStatus = async (id, status, requestUser, reviewerIds) => {
+exports.updateStatus = async (id, status, requestUser) => {
   const task = await Task.findById(id);
   if (!task) throw Object.assign(new Error("Task tidak ditemukan"), { statusCode: 404 });
 
@@ -133,51 +162,25 @@ exports.updateStatus = async (id, status, requestUser, reviewerIds) => {
   }
 
   const isAdminUser = requestUser?.role === "admin";
+  const user = await User.findById(requestUser?.id);
+  const hasAccess = user ? await hasTasksAccess(user) : false;
 
-  // For team tasks: only leader or admin can change status
-  if (task.type === "team" && task.teamId) {
-    const team = await TeamGroup.findById(task.teamId);
-    const isLeader = team && team.leaderId === requestUser?.id;
-    const isReviewer = task.reviewers?.some(r => r.userId === requestUser?.id);
-
-    if (status === "completed") {
-      if (!isReviewer && !isAdminUser) {
-        throw Object.assign(new Error("Hanya peninjau atau admin yang bisa menyelesaikan tugas ini"), { statusCode: 403 });
+  if (status === "completed") {
+    // Only admin, leader of team, or user with tasks access can mark completed
+    if (task.type === "team" && task.teamId) {
+      const team = await TeamGroup.findById(task.teamId);
+      const isLeader = team && team.leaderId === requestUser?.id;
+      if (!isAdminUser && !isLeader && !hasAccess) {
+        throw Object.assign(new Error("Hanya ketua team atau admin yang bisa menyelesaikan tugas"), { statusCode: 403 });
       }
-    } else if (!isLeader && !isAdminUser) {
-      throw Object.assign(new Error("Hanya ketua tim atau admin yang bisa mengubah status tugas tim"), { statusCode: 403 });
-    }
-  } else {
-    // Personal tasks: only reviewer can mark completed if reviewer is assigned
-    if (status === "completed" && task.reviewers?.length > 0) {
-      const isReviewer = task.reviewers.some(r => r.userId === requestUser?.id);
-      if (!isReviewer && !isAdminUser) {
-        throw Object.assign(new Error("Hanya peninjau atau admin yang bisa menyelesaikan tugas ini"), { statusCode: 403 });
+    } else {
+      if (!isAdminUser && !hasAccess) {
+        throw Object.assign(new Error("Anda tidak memiliki izin untuk menyelesaikan tugas ini"), { statusCode: 403 });
       }
     }
-  }
-
-  // If moving to needs-review, set reviewers array
-  if (status === "needs-review" && reviewerIds && reviewerIds.length > 0) {
-    task.reviewers = reviewerIds.map(uid => ({
-      userId: uid,
-      status: "pending",
-      reason: "",
-      reviewedAt: "",
-    }));
   }
 
   task.status = status;
-  
-  // If moving back to in-progress, reset all reviewer statuses
-  if (status === "in-progress" && task.reviewers?.length > 0) {
-    task.reviewers.forEach(r => {
-      r.status = "pending";
-      r.reason = "";
-      r.reviewedAt = "";
-    });
-  }
-
   await task.save();
 
   const actorName = requestUser?.name || "Seseorang";
@@ -192,24 +195,14 @@ exports.updateStatus = async (id, status, requestUser, reviewerIds) => {
     userId: task.assigneeId || task.createdBy,
   });
 
-  // Notifications
-  if (status === "needs-review" && task.reviewers?.length > 0) {
-    // Notify all reviewers
-    const reviewerUserIds = task.reviewers.map(r => r.userId);
-    await Promise.all(reviewerUserIds.map((rid) => Notification.create({
-      userId: rid,
-      title: "Permintaan Tinjauan Tugas",
-      message: `${actorName} meminta Anda meninjau tugas '${task.title}'`,
-      type: "info",
-    })));
-  } else if (status === "completed") {
-    const reviewerUser = requestUser?.name || "Peninjau";
+  if (status === "completed") {
     const recipientIds = [...new Set([task.createdBy, task.assigneeId].filter((rid) => rid && rid !== requestUser?.id))];
-    await Promise.all(recipientIds.map((rid) => Notification.create({
+    await Promise.all(recipientIds.map((rid) => notificationService.create({
       userId: rid,
-      title: "Tugas Disetujui",
-      message: `Tugas '${task.title}' telah diselesaikan oleh ${reviewerUser}`,
+      title: "Tugas Selesai",
+      message: `Tugas '${task.title}' telah diselesaikan oleh ${actorName}`,
       type: "success",
+      category: "task",
     })));
 
     if (task.type === "team" && task.teamId) {
@@ -218,119 +211,17 @@ exports.updateStatus = async (id, status, requestUser, reviewerIds) => {
         const teamRecipientIds = [...new Set([...(team.memberIds || []), team.leaderId]
           .filter((rid) => rid && rid !== requestUser?.id && !recipientIds.includes(rid)))];
         const recipients = await getUsersWithPreference(teamRecipientIds, "teamUpdates");
-        await Promise.all(recipients.map((recipient) => Notification.create({
+        await Promise.all(recipients.map((recipient) => notificationService.create({
           userId: recipient._id.toString(),
-          title: "Tugas Tim Selesai",
-          message: `Tugas tim '${task.title}' telah diselesaikan`,
+          title: "Tugas Team Selesai",
+          message: `Tugas team '${task.title}' telah diselesaikan`,
           type: "success",
+          category: "task",
         })));
       }
     }
-  } else if (task.type === "team" && task.teamId) {
-    const team = await TeamGroup.findById(task.teamId);
-    const recipientIds = [...new Set([task.createdBy, team?.leaderId].filter((rid) => rid && rid !== requestUser?.id))];
-    const recipients = await getUsersWithPreference(recipientIds, "teamUpdates");
-    await Promise.all(recipients.map((recipient) => Notification.create({
-      userId: recipient._id.toString(),
-      title: "Pembaruan Tugas Tim",
-      message: `Status tugas tim '${task.title}' berubah menjadi ${status}`,
-      type: "info",
-    })));
   }
 
-  return task;
-};
-
-exports.reviewTask = async (id, action, reason, requestUser) => {
-  const task = await Task.findById(id);
-  if (!task) throw Object.assign(new Error("Task tidak ditemukan"), { statusCode: 404 });
-
-  if (task.status !== "needs-review") {
-    throw Object.assign(new Error("Tugas ini tidak dalam status perlu ditinjau"), { statusCode: 400 });
-  }
-
-  const reviewerEntry = task.reviewers?.find(r => r.userId === requestUser?.id);
-  if (!reviewerEntry) {
-    throw Object.assign(new Error("Anda bukan peninjau tugas ini"), { statusCode: 403 });
-  }
-
-  if (reviewerEntry.status !== "pending") {
-    throw Object.assign(new Error("Anda sudah memberikan tinjauan"), { statusCode: 400 });
-  }
-
-  reviewerEntry.status = action; // "approved" or "rejected"
-  reviewerEntry.reason = reason || "";
-  reviewerEntry.reviewedAt = new Date().toISOString();
-
-  const actorName = requestUser?.name || "Peninjau";
-
-  if (action === "rejected") {
-    // Any rejection → task back to in-progress
-    task.status = "in-progress";
-    // Reset all other pending reviewers
-    task.reviewers.forEach(r => {
-      if (r.userId !== requestUser.id && r.status === "pending") {
-        r.status = "pending"; // keep pending but task moves back
-      }
-    });
-    await task.save();
-
-    // Notify assignee/creator
-    const recipientIds = [...new Set([task.assigneeId, task.createdBy].filter(rid => rid && rid !== requestUser.id))];
-    await Promise.all(recipientIds.map(rid => Notification.create({
-      userId: rid,
-      title: "Tugas Ditolak",
-      message: `${actorName} menolak tugas '${task.title}'${reason ? `: ${reason}` : ""}`,
-      type: "warning",
-    })));
-
-    await Activity.create({
-      type: "status_changed",
-      message: `${actorName} menolak tinjauan '${task.title}'${reason ? `: ${reason}` : ""}`,
-      userId: task.assigneeId || task.createdBy,
-    });
-  } else if (action === "approved") {
-    // Check if ALL reviewers approved
-    const allApproved = task.reviewers.every(r => r.status === "approved");
-    if (allApproved) {
-      task.status = "completed";
-      await Activity.create({
-        type: "task_completed",
-        message: `Semua peninjau menyetujui '${task.title}'`,
-        userId: task.assigneeId || task.createdBy,
-      });
-
-      // Notify assignee/creator
-      const recipientIds = [...new Set([task.assigneeId, task.createdBy].filter(rid => rid && rid !== requestUser.id))];
-      await Promise.all(recipientIds.map(rid => Notification.create({
-        userId: rid,
-        title: "Tugas Disetujui",
-        message: `Semua peninjau telah menyetujui tugas '${task.title}'`,
-        type: "success",
-      })));
-    } else {
-      // Notify assignee about partial approval
-      if (task.assigneeId && task.assigneeId !== requestUser.id) {
-        await Notification.create({
-          userId: task.assigneeId,
-          title: "Tinjauan Parsial",
-          message: `${actorName} menyetujui tugas '${task.title}'. Menunggu peninjau lainnya.`,
-          type: "info",
-        });
-      }
-    }
-    await task.save();
-  }
-
-  return task;
-};
-
-exports.uploadAttachments = async (id, attachments = []) => {
-  const task = await Task.findById(id);
-  if (!task) throw Object.assign(new Error("Task tidak ditemukan"), { statusCode: 404 });
-
-  task.attachments = [...(task.attachments || []), ...attachments];
-  await task.save();
   return task;
 };
 
@@ -346,6 +237,61 @@ exports.addNote = async (id, note) => {
     userId: note.authorId,
   });
 
+  // Notify all relevant members (excluding the note author)
+  try {
+    const authorId = note.authorId;
+    const authorUser = await User.findById(authorId);
+    const authorName = authorUser?.name || "Seseorang";
+
+    let recipientIds = new Set();
+    if (task.assigneeId && task.assigneeId !== authorId) recipientIds.add(task.assigneeId);
+    if (task.createdBy && task.createdBy !== authorId) recipientIds.add(task.createdBy);
+
+    if (task.type === "team" && task.teamId) {
+      const team = await TeamGroup.findById(task.teamId);
+      if (team) {
+        (team.memberIds || []).forEach(mid => { if (mid !== authorId) recipientIds.add(mid); });
+        if (team.leaderId && team.leaderId !== authorId) recipientIds.add(team.leaderId);
+      }
+    }
+
+    const uniqueIds = [...recipientIds];
+    if (uniqueIds.length > 0) {
+      await notificationService.createForUsers(uniqueIds, {
+        title: "Catatan Progress Baru",
+        message: `${authorName} menambahkan catatan di tugas "${task.title}"`,
+        type: "info",
+        category: "task",
+        sender: authorName,
+      });
+    }
+  } catch (err) {
+    console.error("[Task] Failed to notify on note add:", err);
+  }
+
+  return task;
+};
+
+exports.editNote = async (taskId, noteId, data, userId) => {
+  const task = await Task.findById(taskId);
+  if (!task) throw Object.assign(new Error("Task tidak ditemukan"), { statusCode: 404 });
+  const note = task.notes.id(noteId);
+  if (!note) throw Object.assign(new Error("Catatan tidak ditemukan"), { statusCode: 404 });
+  if (note.authorId !== userId) throw Object.assign(new Error("Anda bukan pembuat catatan ini"), { statusCode: 403 });
+  if (data.text !== undefined) note.text = data.text;
+  if (data.attachments) note.attachments = data.attachments;
+  await task.save();
+  return task;
+};
+
+exports.deleteNote = async (taskId, noteId, userId) => {
+  const task = await Task.findById(taskId);
+  if (!task) throw Object.assign(new Error("Task tidak ditemukan"), { statusCode: 404 });
+  const note = task.notes.id(noteId);
+  if (!note) throw Object.assign(new Error("Catatan tidak ditemukan"), { statusCode: 404 });
+  if (note.authorId !== userId) throw Object.assign(new Error("Anda bukan pembuat catatan ini"), { statusCode: 403 });
+  note.deleteOne();
+  await task.save();
   return task;
 };
 

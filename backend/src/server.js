@@ -1,4 +1,14 @@
 require("dotenv").config();
+
+// ─── Prevent Baileys / third-party crashes from killing the server ───────────
+process.on("uncaughtException", (err) => {
+  console.error("[Server] Uncaught Exception (non-fatal):", err.message);
+});
+process.on("unhandledRejection", (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  console.error("[Server] Unhandled Rejection (non-fatal):", msg);
+});
+// ─────────────────────────────────────────────────────────────────────────────
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
@@ -14,7 +24,10 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: config.corsOrigin === "*" ? true : config.corsOrigin.split(",").map(s => s.trim()),
+  credentials: true,
+}));
 app.use(morgan("dev"));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));

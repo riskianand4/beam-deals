@@ -8,6 +8,7 @@ interface StatsCardProps {
   icon: LucideIcon;
   color: string;
   bgColor: string;
+   suffix?: string;
   delay?: number;
 }
 
@@ -27,7 +28,7 @@ const AnimatedNumber = ({ value, delay = 0 }: { value: number; delay?: number })
   return <motion.span>{rounded}</motion.span>;
 };
 
-const StatsCard = ({ label, value, icon: Icon, color, bgColor, delay = 0 }: StatsCardProps) => {
+const StatsCard = ({ label, value, icon: Icon, color, bgColor, delay = 0 ,suffix}: StatsCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -40,7 +41,7 @@ const StatsCard = ({ label, value, icon: Icon, color, bgColor, delay = 0 }: Stat
       </div>
       <div>
         <p className="text-xl font-bold text-foreground tracking-tight">
-          <AnimatedNumber value={value} delay={delay * 0.1} />
+          <AnimatedNumber value={value} delay={delay * 0.1} /> {suffix ?? ""}
         </p>
         <p className="text-[10px] text-muted-foreground font-medium">{label}</p>
       </div>

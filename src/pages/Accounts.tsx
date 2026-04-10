@@ -7,7 +7,7 @@ import type { User, UserDocument, Role, TeamGroup } from "@/types";
 import { calculateProfileCompletion, getCompletionColor, getCompletionBgColor, formatDocumentType, getMissingFields } from "@/lib/profileUtils";
 import { motion } from "framer-motion";
 import {
-  UserPlus, Users, Mail, Briefcase, Building, Shield, Trash2, Edit2, Search, Eye, EyeOff, Calendar, KeyRound, RefreshCw, AlertCircle, Download, FileText, ClipboardList, Upload, Save, Camera, Phone, MapPin, Heart, CreditCard, Check, X,
+  UserPlus, Users, Mail, Briefcase, Building, Shield, Trash2, Edit2, Search, Eye, EyeOff, Calendar, KeyRound, RefreshCw, AlertCircle, Download, FileText, ClipboardList, Upload, Save, Camera, Phone, MapPin, Heart, CreditCard, Check, X, MoreVertical,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -18,8 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -66,7 +65,7 @@ const Accounts = () => {
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [detailSheetUser, setDetailSheetUser] = useState<User | null>(null);
+  // detailSheetUser removed — navigating to profile instead
 
   // Profile editor sheet
   const [editorUser, setEditorUser] = useState<User | null>(null);
@@ -95,6 +94,8 @@ const Accounts = () => {
   const [formPosition, setFormPosition] = useState("");
   const [formDepartment, setFormDepartment] = useState("");
   const [formRole, setFormRole] = useState<Role>("employee");
+  const [formOffice, setFormOffice] = useState("");
+  const [formWhatsapp, setFormWhatsapp] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Fetch supplementary data
@@ -145,6 +146,7 @@ const Accounts = () => {
   const resetForm = () => {
     setFormName(""); setFormEmail(""); setFormPassword(""); setFormPosition("");
     setFormDepartment(""); setFormRole("employee"); setEditUserId(null);
+    setFormOffice(""); setFormWhatsapp("");
     setFormErrors({}); setShowPassword(false);
   };
 
@@ -156,7 +158,9 @@ const Accounts = () => {
   const openEditUser = (user: User) => {
     setEditUserId(user.id); setFormName(user.name); setFormEmail(user.email);
     setFormPassword(""); setFormPosition(user.position); setFormDepartment(user.department);
-    setFormRole(user.role); setDialogOpen(true);
+    setFormRole(user.role); setFormOffice(user.office || "");
+    setFormWhatsapp((user as any).whatsapp || "");
+    setDialogOpen(true);
   };
 
   const openResetPassword = (user: User) => {
@@ -181,13 +185,16 @@ const Accounts = () => {
       if (editUserId) {
         await api.updateUser(editUserId, {
           name: formName.trim(), email: formEmail.trim(), position: formPosition.trim(),
-          department: formDepartment.trim(), role: formRole,
+          department: formDepartment.trim(), role: formRole, office: formOffice,
+          whatsapp: formWhatsapp.trim() || null,
         });
         toast.success("Akun berhasil diperbarui");
       } else {
         await api.createUser({
           name: formName.trim(), email: formEmail.trim(), password: formPassword,
           position: formPosition.trim(), department: formDepartment.trim(), role: formRole,
+          office: formOffice,
+          whatsapp: formWhatsapp.trim() || null,
           joinDate: new Date().toISOString().split("T")[0],
         });
         toast.success("Akun berhasil dibuat");
@@ -240,12 +247,6 @@ const Accounts = () => {
   const incompleteCount = users.filter((u) => getUserCompletion(u) < 80).length;
   const resetPasswordUser = resetPasswordUserId ? users.find((u) => u.id === resetPasswordUserId) : null;
 
-  // Detail sheet data
-  const detailUserDocs = detailSheetUser ? documents.filter((d) => d.userId === detailSheetUser.id) : [];
-  const detailUserTasks = detailSheetUser ? tasks.filter((t: any) => t.assigneeId === detailSheetUser.id) : [];
-  const detailUserTeams = detailSheetUser ? teams.filter((t) => t.memberIds.includes(detailSheetUser.id)) : [];
-  const detailCompletion = detailSheetUser ? calculateProfileCompletion(detailSheetUser, documents) : 0;
-  const detailMissing = detailSheetUser ? getMissingFields(detailSheetUser, documents) : [];
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
@@ -283,11 +284,12 @@ const Accounts = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs">Nama</TableHead>
-                  <TableHead className="text-xs">Jabatan</TableHead>
-                  <TableHead className="text-xs hidden md:table-cell">Department</TableHead>
-                  <TableHead className="text-xs hidden sm:table-cell">Role</TableHead>
-                  <TableHead className="text-xs text-right">Aksi</TableHead>
+                    <TableHead className="text-xs">Nama</TableHead>
+                    <TableHead className="text-xs">Jabatan</TableHead>
+                    <TableHead className="text-xs hidden md:table-cell">Department</TableHead>
+                    <TableHead className="text-xs hidden md:table-cell">Kantor</TableHead>
+                    <TableHead className="text-xs hidden sm:table-cell">Role</TableHead>
+                    <TableHead className="text-xs text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -298,7 +300,8 @@ const Accounts = () => {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Avatar className="w-7 h-7">
-                            <AvatarFallback className={`text-[9px] font-medium ${user.role === "admin" ? "bg-warning/10 text-warning" : "bg-primary "}`}>
+                            {user.avatar && <AvatarImage src={user.avatar} alt={user.name} />}
+                            <AvatarFallback className={`text-[9px] font-medium ${user.role === "admin" ? "bg-warning/10 text-warning" : "bg-primary text-primary-foreground"}`}>
                               {initials(user.name)}
                             </AvatarFallback>
                           </Avatar>
@@ -310,19 +313,42 @@ const Accounts = () => {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{user.position}</TableCell>
                       <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{user.department}</TableCell>
-
+                      <TableCell className="text-xs text-muted-foreground hidden md:table-cell">{user.office || "-"}</TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Badge variant={user.role === "admin" ? "default" : "secondary"} className="text-[9px]">
                           {user.role === "admin" ? "Admin" : "Karyawan"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => setDetailSheetUser(user)}><Eye className="w-3.5 h-3.5 " /></Button></TooltipTrigger><TooltipContent side="top" className="text-xs">Lihat Detail</TooltipContent></Tooltip>
-                          <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => openResetPassword(user)}><KeyRound className="w-3.5 h-3.5 text-warning" /></Button></TooltipTrigger><TooltipContent side="top" className="text-xs">Reset Password</TooltipContent></Tooltip>
-                          <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => openEditUser(user)}><Edit2 className="w-3.5 h-3.5" /></Button></TooltipTrigger><TooltipContent side="top" className="text-xs">Edit</TooltipContent></Tooltip>
-                          <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="w-7 h-7 text-destructive" onClick={() => setConfirmDeleteId(user.id)}><Trash2 className="w-3.5 h-3.5" /></Button></TooltipTrigger><TooltipContent side="top" className="text-xs">Hapus</TooltipContent></Tooltip>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="w-7 h-7">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem className="text-xs gap-2 cursor-pointer" onClick={() => navigate("/profile/" + user.id)}>
+                              <Eye className="w-3.5 h-3.5" /> Lihat Profil
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-xs gap-2 cursor-pointer" onClick={() => openEditUser(user)}>
+                              <Edit2 className="w-3.5 h-3.5" /> Edit Akun
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-xs gap-2 cursor-pointer" onClick={() => openResetPassword(user)}>
+                              <KeyRound className="w-3.5 h-3.5 text-warning" /> Reset Password
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-xs gap-2 cursor-pointer" onClick={async () => {
+                              try {
+                                await api.updateUser(user.id, { pin: "1234" });
+                                toast.success(`PIN slip gaji ${user.name} direset ke 1234`);
+                              } catch { toast.error("Gagal mereset PIN"); }
+                            }}>
+                              <RefreshCw className="w-3.5 h-3.5 text-primary" /> Reset PIN Slip Gaji
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-xs gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDeleteId(user.id)}>
+                              <Trash2 className="w-3.5 h-3.5" /> Hapus
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -374,15 +400,40 @@ const Accounts = () => {
               </div>
               <div className="space-y-1"><Label className="text-xs">Department</Label><Input value={formDepartment} onChange={(e) => setFormDepartment(e.target.value)} placeholder="cth. IT" className="text-xs" />{formErrors.department && <p className="text-[10px] text-destructive">{formErrors.department}</p>}</div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Role</Label>
+                <Select value={formRole} onValueChange={(v) => setFormRole(v as Role)}>
+                  <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee" className="text-xs">Karyawan</SelectItem>
+                    <SelectItem value="admin" className="text-xs">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Kantor</Label>
+                <Select value={formOffice} onValueChange={setFormOffice}>
+                  <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Pilih kantor..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Meulaboh" className="text-xs">Meulaboh</SelectItem>
+                    <SelectItem value="Banda Aceh" className="text-xs">Banda Aceh</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1">
-              <Label className="text-xs">Role</Label>
-              <Select value={formRole} onValueChange={(v) => setFormRole(v as Role)}>
-                <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="employee" className="text-xs">Karyawan</SelectItem>
-                  <SelectItem value="admin" className="text-xs">Admin</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs flex items-center gap-1.5">
+                <Phone className="w-3 h-3 text-green-500" /> Nomor WhatsApp
+              </Label>
+              <Input
+                value={formWhatsapp}
+                onChange={(e) => setFormWhatsapp(e.target.value)}
+                placeholder="cth. 08123456789"
+                className="text-xs"
+                type="tel"
+              />
+              <p className="text-[10px] text-muted-foreground">Digunakan untuk notifikasi WhatsApp otomatis</p>
             </div>
             <Button onClick={handleSubmit} className="w-full text-xs">{editUserId ? "Simpan Perubahan" : "Buat Akun"}</Button>
           </div>
@@ -418,133 +469,6 @@ const Accounts = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Employee Detail Sheet */}
-      <Sheet open={!!detailSheetUser} onOpenChange={(o) => !o && setDetailSheetUser(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="text-sm flex items-center gap-2">Detail Karyawan</SheetTitle>
-            <SheetDescription className="sr-only">Detail informasi karyawan</SheetDescription>
-          </SheetHeader>
-          
-          {detailSheetUser && (
-            <div className="mt-4 space-y-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-primary font-semibold">{initials(detailSheetUser.name)}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-foreground">{detailSheetUser.name}</p>
-                  <p className="text-xs text-muted-foreground">{detailSheetUser.position} • {detailSheetUser.department}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Progress value={detailCompletion} className="w-20 h-1.5" />
-                    <span className={`text-[10px] font-medium ${getCompletionColor(detailCompletion)}`}>{detailCompletion}%</span>
-                  </div>
-                </div>
-              </div>
-
-              {detailMissing.length > 0 && (
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-warning/10 border border-warning/20">
-                  <AlertCircle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-muted-foreground"><span className="text-warning font-medium">Belum lengkap:</span> {detailMissing.join(", ")}</p>
-                </div>
-              )}
-
-              <Tabs defaultValue="personal" className="w-full">
-                <TabsList className="w-full">
-                  <TabsTrigger value="personal" className="flex-1 text-xs">Data Pribadi</TabsTrigger>
-                  <TabsTrigger value="documents" className="flex-1 text-xs">Dokumen</TabsTrigger>
-                  <TabsTrigger value="work" className="flex-1 text-xs">Info Kerja</TabsTrigger>
-                </TabsList>
-                <TabsContent value="personal" className="mt-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div><p className="text-muted-foreground">Email</p><p className="font-medium text-foreground">{detailSheetUser.email}</p></div>
-                    <div><p className="text-muted-foreground">No. Telepon</p><p className="font-medium text-foreground">{detailSheetUser.phone || "-"}</p></div>
-                    <div><p className="text-muted-foreground">Tempat Lahir</p><p className="font-medium text-foreground">{detailSheetUser.birthPlace || "-"}</p></div>
-                    <div><p className="text-muted-foreground">Tanggal Lahir</p><p className="font-medium text-foreground">{detailSheetUser.birthDate ? format(new Date(detailSheetUser.birthDate), "d MMM yyyy", { locale: localeID }) : "-"}</p></div>
-                    <div><p className="text-muted-foreground">Jenis Kelamin</p><p className="font-medium text-foreground">{detailSheetUser.gender === "male" ? "Laki-laki" : detailSheetUser.gender === "female" ? "Perempuan" : "-"}</p></div>
-                    <div><p className="text-muted-foreground">Agama</p><p className="font-medium text-foreground">{detailSheetUser.religion || "-"}</p></div>
-                    <div><p className="text-muted-foreground">Status</p><p className="font-medium text-foreground">{detailSheetUser.maritalStatus === "single" ? "Belum Menikah" : detailSheetUser.maritalStatus === "married" ? "Menikah" : detailSheetUser.maritalStatus === "divorced" ? "Cerai" : detailSheetUser.maritalStatus === "widowed" ? "Duda/Janda" : "-"}</p></div>
-                    <div><p className="text-muted-foreground">Kontak Darurat</p><p className="font-medium text-foreground">{detailSheetUser.emergencyContact || "-"}</p></div>
-                  </div>
-                  <Separator />
-                  <div className="space-y-2 text-xs"><div><p className="text-muted-foreground">Alamat</p><p className="font-medium text-foreground">{detailSheetUser.address || "-"}</p></div></div>
-                  <Separator />
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div><p className="text-muted-foreground">NPWP</p><p className="font-medium text-foreground">{detailSheetUser.npwp || "-"}</p></div>
-                    <div><p className="text-muted-foreground">BPJS Kesehatan</p><p className="font-medium text-foreground">{detailSheetUser.bpjsKesehatan || "-"}</p></div>
-                    <div><p className="text-muted-foreground">BPJS TK</p><p className="font-medium text-foreground">{detailSheetUser.bpjsKetenagakerjaan || "-"}</p></div>
-                  </div>
-                  <Separator />
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div><p className="text-muted-foreground">Bank</p><p className="font-medium text-foreground">{detailSheetUser.bankName || "-"}</p></div>
-                    <div><p className="text-muted-foreground">No. Rekening</p><p className="font-medium text-foreground">{detailSheetUser.bankAccountNumber || "-"}</p></div>
-                    <div><p className="text-muted-foreground">Atas Nama</p><p className="font-medium text-foreground">{detailSheetUser.bankAccountName || "-"}</p></div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="documents" className="mt-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {(["ktp", "kk", "foto", "sim", "ijazah"] as const).map((type) => {
-                      const doc = detailUserDocs.find((d) => d.type === type);
-                      return (
-                        <div key={type} className="flex flex-col items-center p-3 rounded-lg border border-border bg-card">
-                          <p className="text-xs font-medium text-foreground mb-2">{formatDocumentType(type)}</p>
-                          {doc ? (
-                            <>
-                              <div className="w-16 h-16 rounded bg-muted flex items-center justify-center mb-2"><FileText className="w-6 h-6 text-muted-foreground" /></div>
-                              <p className="text-[9px] text-muted-foreground truncate max-w-full">{doc.fileName}</p>
-                            </>
-                          ) : (
-                            <div className="flex flex-col items-center">
-                              <div className="w-16 h-16 rounded bg-muted flex items-center justify-center mb-2"><FileText className="w-6 h-6 text-muted-foreground" /></div>
-                              <p className="text-[10px] text-muted-foreground">Belum diupload</p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </TabsContent>
-                <TabsContent value="work" className="mt-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div><p className="text-muted-foreground">Jabatan</p><p className="font-medium text-foreground">{detailSheetUser.position}</p></div>
-                    <div><p className="text-muted-foreground">Department</p><p className="font-medium text-foreground">{detailSheetUser.department}</p></div>
-                    <div><p className="text-muted-foreground">Tipe Kontrak</p><p className="font-medium text-foreground">{detailSheetUser.contractType || "-"}</p></div>
-                    <div><p className="text-muted-foreground">Bergabung</p><p className="font-medium text-foreground">{format(new Date(detailSheetUser.joinDate), "d MMM yyyy", { locale: localeID })}</p></div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <p className="text-xs font-medium text-foreground mb-2 flex items-center gap-1"><Users className="w-3 h-3" /> Tim</p>
-                    {detailUserTeams.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Belum masuk tim</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">{detailUserTeams.map((t) => (<Badge key={t.id} variant="secondary" className="text-[10px]">{t.name}</Badge>))}</div>
-                    )}
-                  </div>
-                  <Separator />
-                  <div>
-                    <p className="text-xs font-medium text-foreground mb-2 flex items-center gap-1">
-                      <ClipboardList className="w-3 h-3" /> Tugas Aktif ({detailUserTasks.filter((t: any) => t.status !== "completed").length})
-                    </p>
-                    {detailUserTasks.filter((t: any) => t.status !== "completed").length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Tidak ada tugas aktif</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {detailUserTasks.filter((t: any) => t.status !== "completed").slice(0, 5).map((task: any) => (
-                          <div key={task.id} className="flex items-center justify-between p-2 rounded-lg border border-border text-xs">
-                            <span className="text-foreground truncate max-w-[200px]">{task.title}</span>
-                            <Badge variant={task.priority === "high" ? "destructive" : task.priority === "medium" ? "default" : "secondary"} className="text-[9px]">{task.priority}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
 
       <ConfirmDialog open={!!confirmDeleteId} onOpenChange={(o) => { if (!o) setConfirmDeleteId(null); }} title="Hapus akun ini?" description="Akun akan dihapus secara permanen dan tidak dapat dikembalikan." variant="destructive" confirmText="Hapus" onConfirm={() => confirmDeleteId && deleteUser(confirmDeleteId)} />
     </motion.div>

@@ -34,7 +34,7 @@ const DashboardSummary = () => {
       alerts.push({
         icon: MessageCircleCodeIcon,
         text: `${adminBadges.messages} pesan belum dibaca`,
-        color: "text-primary bg-primary/10",
+        color: " bg-primary/10",
       });
     }
     if (alerts.length === 0) {

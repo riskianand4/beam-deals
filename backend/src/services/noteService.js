@@ -2,6 +2,7 @@ const DailyNote = require("../models/DailyNote");
 const AdminNote = require("../models/AdminNote");
 const BossNote = require("../models/BossNote");
 const User = require("../models/User");
+const notificationService = require("./notificationService");
 
 // Daily notes (employee)
 exports.getDailyNotes = async (userId, date) => {
@@ -42,7 +43,26 @@ exports.createAdminNote = async (data, requestUser) => {
       throw Object.assign(new Error("Anda tidak bisa mengirim catatan ke admin"), { statusCode: 403 });
     }
   }
-  return AdminNote.create(data);
+  const note = await AdminNote.create(data);
+
+  // Notify the recipient
+  if (data.toEmployeeId && requestUser) {
+    try {
+      const sender = await User.findById(requestUser.id || requestUser._id);
+      await notificationService.create({
+        userId: data.toEmployeeId,
+        title: "Catatan Baru dari Admin",
+        message: `${sender?.name || "Admin"} mengirimkan catatan untuk Anda`,
+        type: "info",
+        category: "general",
+        sender: sender?.name || "Admin",
+      });
+    } catch (err) {
+      console.error("[Note] Failed to notify:", err);
+    }
+  }
+
+  return note;
 };
 
 exports.deleteAdminNote = async (id) => {

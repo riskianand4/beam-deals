@@ -3,13 +3,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTasks } from "@/contexts/TaskContext";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Users, Receipt, Wallet, FileText, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, Receipt, Wallet, FileText, AlertCircle, ChevronDown, ChevronUp, ClipboardList } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { getUploadUrl } from "@/lib/api";
 import api from "@/lib/api";
-import type { Reimbursement, CashAdvance, PayslipData, TeamGroup } from "@/types";
+import type { Reimbursement, CashAdvance, PayslipData, TeamGroup, WorkReport } from "@/types";
 
 const AdminDashboardSummary = () => {
   const { isAdmin, users } = useAuth();
@@ -21,6 +21,8 @@ const AdminDashboardSummary = () => {
   const [teams, setTeams] = useState<TeamGroup[]>([]);
   const [showAllEmployees, setShowAllEmployees] = useState(false);
   const [showAllTeams, setShowAllTeams] = useState(false);
+  const [workReports, setWorkReports] = useState<WorkReport[]>([]);
+  const [showAllReports, setShowAllReports] = useState(false);
 
   const employees = users.filter((u) => u.role === "employee");
 
@@ -30,13 +32,14 @@ const AdminDashboardSummary = () => {
     api.getCashAdvances().then(setCashAdvances).catch(() => {});
     api.getPayslips().then(setPayslips).catch(() => {});
     api.getTeams().then(setTeams).catch(() => {});
+    api.getRecentWorkReports().then(setWorkReports).catch(() => {});
   }, [isAdmin]);
 
   if (!isAdmin) return null;
 
   const employeeSummaries = employees.map((emp) => {
     const empTasks = tasks.filter((t) => t.assigneeId === emp.id);
-    const pendingTasks = empTasks.filter((t) => t.status === "todo" || t.status === "in-progress").length;
+    const pendingTasks = empTasks.filter((t) => t.status === "todo").length;
     const completedTasks = empTasks.filter((t) => t.status === "completed").length;
     const totalTasks = empTasks.length;
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -70,6 +73,7 @@ const AdminDashboardSummary = () => {
 
   const visibleEmployees = showAllEmployees ? employeeSummaries : employeeSummaries.slice(0, 1);
   const visibleTeams = showAllTeams ? teamSummaries : teamSummaries.slice(0, 1);
+  const visibleReports = showAllReports ? workReports : workReports.slice(0, 3);
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="ms-card p-4 space-y-4">
@@ -97,7 +101,7 @@ const AdminDashboardSummary = () => {
                   <div className="flex items-center gap-2">
                     <Avatar className="w-7 h-7">
                       {emp.avatar && <AvatarImage src={getUploadUrl(emp.avatar)} alt={emp.name} />}
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{initials}</AvatarFallback>
+                      <AvatarFallback className="bg-primary/10  text-xs font-semibold">{initials}</AvatarFallback>
                     </Avatar>
                     <div><p className="text-xs font-medium text-foreground">{emp.name}</p><p className="text-[10px] text-muted-foreground">{emp.position}</p></div>
                   </div>
@@ -146,6 +150,43 @@ const AdminDashboardSummary = () => {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Laporan Karyawan */}
+      <div className="space-y-2">
+        <h3 className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+          <ClipboardList className="w-3 h-3" /> Laporan Karyawan
+        </h3>
+        {workReports.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">Belum ada laporan</p>
+        ) : (
+          <>
+            {visibleReports.map((report) => {
+              const emp = users.find(u => u.id === report.userId);
+              return (
+                <div key={report.id} className="p-3 rounded-lg border border-border space-y-1 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate(`/profile/${report.userId}`)}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="w-6 h-6">
+                        {emp?.avatar && <AvatarImage src={getUploadUrl(emp.avatar)} alt={emp.name} />}
+                        <AvatarFallback className="bg-primary/10 text-[9px] font-semibold">{emp?.name?.charAt(0) || "?"}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">{report.title}</p>
+                        <p className="text-[10px] text-muted-foreground">{emp?.name || "?"} • {new Date(report.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {workReports.length > 3 && (
+              <Button variant="ghost" size="sm" className="w-full text-[10px] h-7 gap-1 text-muted-foreground" onClick={() => setShowAllReports(!showAllReports)}>
+                {showAllReports ? <><ChevronUp className="w-3 h-3" /> Sembunyikan</> : <><ChevronDown className="w-3 h-3" /> Selengkapnya ({workReports.length - 3} lainnya)</>}
+              </Button>
+            )}
+          </>
+        )}
       </div>
     </motion.div>
   );

@@ -1,10 +1,10 @@
 // All shared types — no mock data, pure interfaces
 export type Role = "admin" | "employee";
-export type TaskStatus = "todo" | "in-progress" | "needs-review" | "completed";
-export type Priority = "high" | "medium" | "low";
+export type TaskStatus = "todo" | "completed";
+export type Priority = "high" | "medium" | "low" | "none";
 export type LeaveType = "annual" | "sick" | "permission";
 export type RequestStatus = "pending" | "approved" | "rejected";
-export type AttendanceStatus = "present" | "late" | "absent" | "leave";
+export type AttendanceStatus = string;
 export type Gender = "male" | "female";
 export type MaritalStatus = "single" | "married" | "divorced" | "widowed";
 export type DocumentType = "ktp" | "kk" | "sim" | "ijazah" | "foto" | "other";
@@ -42,6 +42,7 @@ export interface User {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  office?: string;
 }
 
 export interface UserDocument {
@@ -60,14 +61,7 @@ export interface TaskAttachment {
   size: number;
   type: string;
   url: string;
-}
-
-export interface TaskReviewer {
-  id?: string;
-  userId: string;
-  status: "pending" | "approved" | "rejected";
-  reason: string;
-  reviewedAt: string;
+  uploadedBy?: string;
 }
 
 export interface Task {
@@ -78,7 +72,6 @@ export interface Task {
   teamId?: string;
   type: "personal" | "team";
   createdBy?: string;
-  reviewers: TaskReviewer[];
   status: TaskStatus;
   priority: Priority;
   deadline: string;
@@ -92,6 +85,18 @@ export interface TaskNote {
   text: string;
   createdAt: string;
   authorId: string;
+  attachments?: TaskAttachment[];
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  createdBy: string;
+  expiresAt?: string;
+  status?: "active" | "draft";
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CompanyLink {
@@ -130,6 +135,8 @@ export interface ActivityItem {
   userId: string;
 }
 
+export type NotificationCategory = "task" | "payslip" | "announcement" | "message" | "finance" | "explorer" | "partner" | "approval" | "attendance" | "team" | "work_report" | "general";
+
 export interface Notification {
   id: string;
   userId?: string;
@@ -138,6 +145,17 @@ export interface Notification {
   timestamp: string;
   read: boolean;
   type: "info" | "warning" | "success";
+  category?: NotificationCategory;
+}
+
+export interface WorkReport {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  fileUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AttendanceRecord {
@@ -155,6 +173,8 @@ export interface AttendanceRecord {
   reason?: string;
   proofImage?: string;
   source?: "manual" | "webhook" | "import";
+  justification?: string;
+  justificationPermanent?: boolean;
   userName?: string;
   tranId?: string;
   stateid?: string;
@@ -199,15 +219,38 @@ export interface LeaveBalance {
   sickUsed: number;
 }
 
+export interface ReimbursementComment {
+  _id?: string;
+  userId: string;
+  text: string;
+  attachmentUrl?: string;
+  createdAt: string;
+}
+
+export interface ReimbursementApprover {
+  userId: string;
+  status: "pending" | "approved" | "rejected";
+  reason: string;
+  attachmentUrl?: string[];
+  reviewedAt: string | null;
+}
+
 export interface Reimbursement {
   id: string;
   userId: string;
   category: string;
   amount: number;
+  subject?: string;
   description: string;
   attachments: string[];
-  status: RequestStatus;
+  attachmentUrl?: string;
+  approvers?: ReimbursementApprover[];
+  cc?: { userId: string; name?: string }[];
+  comments?: ReimbursementComment[];
+  status: RequestStatus | "reviewing";
+  overallStatus?: "pending" | "reviewing" | "approved" | "rejected";
   approvedBy?: string;
+  requesterName?: string;
   paymentNote?: string;
   paymentDate?: string;
   createdAt: string;
@@ -247,6 +290,7 @@ export interface TeamGroup {
   name: string;
   memberIds: string[];
   leaderId?: string;
+  supervisorIds?: string[];
   description?: string;
   createdAt: string;
 }
@@ -272,7 +316,7 @@ export interface TeamMessage {
   id: string;
   fromUserId: string;
   toUserId: string;
-  type: "message" | "collaboration_request" | "announcement" | "approval_request";
+  type: "message" | "collaboration_request" | "announcement" | "approval_request" | "group";
   subject: string;
   content: string;
   status: "pending" | "accepted" | "rejected" | "read" | "approved";
@@ -280,6 +324,28 @@ export interface TeamMessage {
   parentMessageId: string | null;
   isRead: boolean;
   approvalResponse: string;
+  attachmentUrl?: string;
+  ccUserIds?: string[];
+  groupId?: string;
+  groupName?: string;
+  pinned?: boolean;
+  createdAt: string;
+}
+
+export interface ChatGroupData {
+  id: string;
+  name: string;
+  memberIds: string[];
+  createdBy: string;
+  avatarUrl?: string;
+  createdAt: string;
+}
+
+export interface ApprovalComment {
+  _id?: string;
+  userId: string;
+  text: string;
+  attachmentUrl?: string;
   createdAt: string;
 }
 
@@ -287,6 +353,7 @@ export interface ApprovalApprover {
   userId: string;
   status: "pending" | "approved" | "rejected";
   reason: string;
+  attachmentUrl?: string[];
   reviewedAt: string | null;
 }
 
@@ -294,16 +361,121 @@ export interface ApprovalRequest {
   id: string;
   requesterId: string;
   requesterName: string;
-  type: "leave" | "reimbursement" | "permission" | "other";
+  type: "leave" | "reimbursement" | "permission" | "kendaraan" | "pencairan" | "other";
   subject: string;
   description: string;
   approvers: ApprovalApprover[];
+  cc?: { userId: string; name?: string }[];
+  comments?: ApprovalComment[];
   attachmentUrl: string;
-  overallStatus: "pending" | "approved" | "rejected";
+  responseAttachmentUrl?: string;
+  overallStatus: "pending" | "reviewing" | "approved" | "rejected";
   createdAt: string;
 }
 
-// Constants (non-mock data)
+export interface ExcludedEmployee {
+  id: string;
+  userId: string;
+  userName: string;
+  description: string;
+  createdAt?: string;
+}
+
+export interface PartnerData {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  address: string;
+  status: "active" | "inactive";
+  notes: string;
+  userId?: string | null;
+  createdAt?: string;
+}
+
+export interface PartnerProject {
+  id: string;
+  title: string;
+  description: string;
+  partnerId: string;
+  status: "active" | "completed" | "on-hold";
+  progress: number;
+  startDate: string;
+  endDate: string;
+  createdAt?: string;
+}
+
+export interface PartnerReport {
+  id: string;
+  projectId: string;
+  partnerId: string;
+  title: string;
+  content: string;
+  fileUrl: string;
+  createdAt?: string;
+}
+
+export interface PartnerContract {
+  id: string;
+  partnerId: string;
+  projectId?: string | null;
+  title: string;
+  fileUrl: string;
+  startDate: string;
+  endDate: string;
+  status: "active" | "expired" | "draft";
+  createdAt?: string;
+}
+
+export interface WarningLetter {
+  id: string;
+  userId: string;
+  level: "SP1" | "SP2" | "SP3" | "pemecatan";
+  reason: string;
+  issuedDate: string;
+  expiresAt: string;
+  documentBase64?: string;
+  issuedBy: string;
+  status: "active" | "expired";
+  createdAt?: string;
+}
+export interface AccessPermission {
+  userId: string;
+  permission: "view" | "edit";
+}
+
+export interface ExplorerFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  ownerId: string | null;
+  accessType: "all" | "team" | "specific" | "partner";
+  accessIds: string[];
+  accessPermissions?: AccessPermission[];
+  linkedPartnerId?: string | null;
+  pinned?: boolean;
+  locked?: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ExplorerFile {
+  id: string;
+  name: string;
+  folderId: string | null;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  ownerId: string | null;
+  pinned?: boolean;
+  locked?: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export const WEEKLY_PRODUCTIVITY = [
   { day: "Sen", completed: 0 },
   { day: "Sel", completed: 0 },

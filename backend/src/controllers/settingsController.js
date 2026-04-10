@@ -66,3 +66,21 @@ exports.deletePosition = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getNotificationChannels = async (req, res, next) => {
+  try {
+    const data = await settingsService.getNotificationChannels();
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updateNotificationChannels = async (req, res, next) => {
+  try {
+    const data = await settingsService.updateNotificationChannels(req.body);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};

@@ -1,5 +1,6 @@
 const MenuSetting = require("../models/MenuSetting");
 const PositionAccess = require("../models/PositionAccess");
+const NotificationChannel = require("../models/NotificationChannel");
 
 exports.getMenuSettings = async () => {
   let settings = await MenuSetting.findOne();
@@ -79,4 +80,28 @@ exports.deletePosition = async (id) => {
   const doc = await PositionAccess.findByIdAndDelete(id);
   if (!doc) throw Object.assign(new Error("Jabatan tidak ditemukan"), { statusCode: 404 });
   return { message: "Jabatan berhasil dihapus" };
+};
+
+// Notification Channels
+exports.getNotificationChannels = async () => {
+  let doc = await NotificationChannel.findOne();
+  if (!doc) doc = await NotificationChannel.create({});
+  return doc.toObject();
+};
+
+exports.updateNotificationChannels = async (data) => {
+  let doc = await NotificationChannel.findOne();
+  if (!doc) {
+    doc = await NotificationChannel.create(data);
+  } else {
+    if (data.email) Object.assign(doc.email, data.email);
+    if (data.whatsapp) Object.assign(doc.whatsapp, data.whatsapp);
+    if (data.categories) {
+      for (const [key, val] of Object.entries(data.categories)) {
+        if (doc.categories[key]) Object.assign(doc.categories[key], val);
+      }
+    }
+    await doc.save();
+  }
+  return doc.toObject();
 };

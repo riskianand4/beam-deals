@@ -60,7 +60,7 @@ const FocusTimer = () => {
         <button className="relative flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-md transition-colors hover:bg-muted/60">
           <Timer className="w-3.5 h-3.5" />
           {isRunning && (
-            <span className="font-mono text-[11px] text-primary font-medium">
+            <span className="font-mono text-[11px]  font-medium">
               {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
             </span>
           )}

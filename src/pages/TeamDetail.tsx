@@ -9,7 +9,8 @@ import {
   ArrowLeft, Users, Crown, Target, CheckCircle2, Clock, AlertTriangle, TrendingUp,
   Flag, Calendar, Paperclip, MessageCircleCodeIcon,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getUploadUrl } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -58,9 +59,7 @@ const TeamDetail = () => {
   }, [tasks, team]);
 
   const completedCount = teamTasks.filter((t) => t.status === "completed").length;
-  const inProgressCount = teamTasks.filter((t) => t.status === "in-progress").length;
   const todoCount = teamTasks.filter((t) => t.status === "todo").length;
-  const reviewCount = teamTasks.filter((t) => t.status === "needs-review").length;
   const teamPct = teamTasks.length > 0 ? Math.round((completedCount / teamTasks.length) * 100) : 0;
   const overdueTasks = teamTasks.filter((t) => new Date(t.deadline) < new Date() && t.status !== "completed").length;
 
@@ -104,11 +103,9 @@ const TeamDetail = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <StatsCard label="Akan Dikerjakan" value={todoCount} icon={Clock} color="text-amber-600" bgColor="bg-amber-600/20" delay={0} />
-        <StatsCard label="Sedang Dikerjakan" value={inProgressCount} icon={TrendingUp} color="" bgColor="bg-primary" delay={1} />
-        <StatsCard label="Perlu Ditinjau" value={reviewCount} icon={AlertTriangle} color="text-orange-600" bgColor="bg-orange-600/20" delay={2} />
-        <StatsCard label="Selesai" value={completedCount} icon={CheckCircle2} color="text-success" bgColor="bg-success/10" delay={3} />
+      <div className="grid grid-cols-2 gap-2">
+        <StatsCard label="Tugas" value={todoCount} icon={Clock} color="text-amber-600" bgColor="bg-amber-600/20" delay={0} />
+        <StatsCard label="Selesai" value={completedCount} icon={CheckCircle2} color="text-success" bgColor="bg-success/10" delay={1} />
       </div>
 
       <Tabs defaultValue="members" className="w-full">
@@ -122,6 +119,7 @@ const TeamDetail = () => {
           {leader && (
             <div className="ms-card p-3 flex items-center gap-3 border-warning/20">
               <Avatar className="w-10 h-10 ring-2 ring-warning/30">
+                {leader.avatar && <AvatarImage src={getUploadUrl(leader.avatar)} />}
                 <AvatarFallback className="bg-warning/10 text-warning font-semibold">{initials(leader.name)}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
@@ -130,13 +128,13 @@ const TeamDetail = () => {
                 </p>
                 <p className="text-xs text-muted-foreground">{leader.position}</p>
               </div>
-              <Badge variant="outline" className="text-[9px] border-warning/30 text-warning">Ketua</Badge>
             </div>
           )}
           {members.filter((m) => m.id !== team.leaderId).map((member) => (
             <div key={member.id} className="ms-card p-3 flex items-center gap-3">
               <Avatar className="w-9 h-9">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">{initials(member.name)}</AvatarFallback>
+                {member.avatar && <AvatarImage src={getUploadUrl(member.avatar)} />}
+                <AvatarFallback className="bg-primary/10  text-xs font-medium">{initials(member.name)}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
                 <p className="text-sm text-foreground font-medium">{member.name}</p>
@@ -155,17 +153,13 @@ const TeamDetail = () => {
             return (
               <div key={task.id} className="ms-card p-3 flex items-center gap-3 cursor-pointer hover:shadow-sm transition-shadow" onClick={() => navigate(`/tasks?tab=team&teamId=${teamId}`)}>
                 <div className={`w-2 h-2 rounded-full shrink-0 ${
-                  task.status === "completed" ? "bg-success" :
-                  task.status === "in-progress" ? "bg-primary" :
-                  task.status === "needs-review" ? "bg-warning" : "bg-muted-foreground"
+                  task.status === "completed" ? "bg-success" : "bg-muted-foreground"
                 }`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-foreground truncate">{task.title}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {assignee?.name?.split(" ")[0] || "Tim"} · {
-                      task.status === "todo" ? "Menunggu" :
-                      task.status === "in-progress" ? "Dikerjakan" :
-                      task.status === "needs-review" ? "Review" : "Selesai"
+                    {assignee?.name?.split(" ")[0] || "Team"} · {
+                      task.status === "todo" ? "Tugas" : "Selesai"
                     }
                   </p>
                 </div>
@@ -229,7 +223,8 @@ const TeamDetail = () => {
               <div key={member.id} className="ms-card p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Avatar className="w-6 h-6">
-                    <AvatarFallback className="text-[8px] bg-primary/10 text-primary font-medium">{initials(member.name)}</AvatarFallback>
+                    {member.avatar && <AvatarImage src={getUploadUrl(member.avatar)} />}
+                    <AvatarFallback className="text-[8px] bg-primary/10  font-medium">{initials(member.name)}</AvatarFallback>
                   </Avatar>
                   <span className="text-xs font-medium text-foreground flex-1">
                     {member.name}

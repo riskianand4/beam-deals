@@ -2,30 +2,16 @@ const Approval = require("../models/Approval");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
 const PositionAccess = require("../models/PositionAccess");
+const notificationService = require("./notificationService");
 
-exports.getAll = async (userId, role, position) => {
+exports.getAll = async (userId, role) => {
   if (role === "admin") return Approval.find().sort({ createdAt: -1 });
 
-  // Check if user has viewApproval or approve access
-  let hasViewAccess = false;
-  let hasApproveAccess = false;
-  if (position) {
-    const pa = await PositionAccess.findOne({ position });
-    if (pa && pa.menus) {
-      hasViewAccess = pa.menus.viewApproval === true;
-      hasApproveAccess = pa.menus.approve === true;
-    }
-  }
-
-  if (hasViewAccess || hasApproveAccess) {
-    return Approval.find().sort({ createdAt: -1 });
-  }
-
-  // Regular employee: only own requests or requests where they're an approver
   return Approval.find({
     $or: [
       { requesterId: userId },
       { "approvers.userId": userId },
+      { "cc.userId": userId },
     ],
   }).sort({ createdAt: -1 });
 };
@@ -37,12 +23,44 @@ exports.create = async (data) => {
     requesterName: user ? user.name : "",
   });
 
-  // Notify approvers
   for (const approver of approval.approvers) {
-    await Notification.create({
+    await notificationService.create({
       userId: approver.userId,
       title: "Permintaan Persetujuan Baru",
+      category: "approval",
       message: `${approval.requesterName} mengajukan ${approval.type}: ${approval.subject}`,
+      type: "info",
+    });
+  }
+
+  if (approval.cc && approval.cc.length > 0) {
+    for (const cc of approval.cc) {
+      await notificationService.create({
+        userId: cc.userId,
+        title: "CC: Permintaan Persetujuan Baru",
+        category: "approval",
+        message: `${approval.requesterName} mengajukan ${approval.type}: ${approval.subject} (Anda di-CC)`,
+        type: "info",
+      });
+    }
+  }
+
+  return approval;
+};
+
+exports.updateStatus = async (id, newStatus, userId) => {
+  const approval = await Approval.findById(id);
+  if (!approval) throw Object.assign(new Error("Tidak ditemukan"), { statusCode: 404 });
+  approval.overallStatus = newStatus;
+  await approval.save();
+
+  if (newStatus === "reviewing") {
+    const reviewer = await User.findById(userId);
+    await notificationService.create({
+      userId: approval.requesterId,
+      title: "Pengajuan Sedang Ditinjau",
+      category: "approval",
+      message: `${reviewer?.name || "Peninjau"} sedang meninjau permintaan "${approval.subject}"`,
       type: "info",
     });
   }
@@ -50,9 +68,16 @@ exports.create = async (data) => {
   return approval;
 };
 
-exports.respond = async (id, approverId, action, reason) => {
+exports.respond = async (id, approverId, action, reason, responseAttachmentUrls) => {
   const approval = await Approval.findById(id);
   if (!approval) throw Object.assign(new Error("Tidak ditemukan"), { statusCode: 404 });
+
+  if (approval.overallStatus === "approved" || approval.overallStatus === "rejected") {
+    const responder = await User.findById(approverId);
+    if (!responder || responder.role !== "admin") {
+      throw Object.assign(new Error("Pengajuan sudah selesai, tidak bisa diubah"), { statusCode: 403 });
+    }
+  }
 
   const approver = approval.approvers.find(a => a.userId === approverId);
   if (!approver) throw Object.assign(new Error("Anda bukan peninjau"), { statusCode: 403 });
@@ -61,7 +86,11 @@ exports.respond = async (id, approverId, action, reason) => {
   approver.reason = reason || "";
   approver.reviewedAt = new Date();
 
-  // Update overall status
+  if (responseAttachmentUrls && responseAttachmentUrls.length > 0) {
+    approver.attachmentUrl = [...(approver.attachmentUrl || []), ...responseAttachmentUrls];
+    approval.responseAttachmentUrl = responseAttachmentUrls[0];
+  }
+
   const allApproved = approval.approvers.every(a => a.status === "approved");
   const anyRejected = approval.approvers.some(a => a.status === "rejected");
 
@@ -70,12 +99,12 @@ exports.respond = async (id, approverId, action, reason) => {
 
   await approval.save();
 
-  // Notify requester
   const statusLabel = action === "approved" ? "disetujui" : "ditolak";
   const approverUser = await User.findById(approverId);
-  await Notification.create({
+  await notificationService.create({
     userId: approval.requesterId,
     title: `Persetujuan ${action === "approved" ? "Disetujui" : "Ditolak"}`,
+    category: "approval",
     message: `${approverUser?.name || "Peninjau"} telah ${statusLabel} permintaan "${approval.subject}"`,
     type: action === "approved" ? "success" : "warning",
   });
@@ -83,10 +112,96 @@ exports.respond = async (id, approverId, action, reason) => {
   return approval;
 };
 
-exports.remove = async (id, userId) => {
+exports.addComment = async (id, userId, text, attachmentUrl) => {
   const approval = await Approval.findById(id);
   if (!approval) throw Object.assign(new Error("Tidak ditemukan"), { statusCode: 404 });
-  if (approval.requesterId !== userId) throw Object.assign(new Error("Tidak bisa menghapus"), { statusCode: 403 });
+
+  approval.comments.push({ userId, text, attachmentUrl: attachmentUrl || "", createdAt: new Date() });
+  await approval.save();
+
+  // Notify requester if commenter is not requester
+  if (userId !== approval.requesterId) {
+    const commenter = await User.findById(userId);
+    await notificationService.create({
+      userId: approval.requesterId,
+      title: "Komentar Baru pada Pengajuan",
+      message: `${commenter?.name || "Seseorang"} berkomentar pada "${approval.subject}"`,
+      type: "info",
+      category: "approval",
+    });
+  }
+
+  return approval;
+};
+
+exports.editResponse = async (id, approverId, data) => {
+  const approval = await Approval.findById(id);
+  if (!approval) throw Object.assign(new Error("Tidak ditemukan"), { statusCode: 404 });
+
+  if (approval.overallStatus === "approved" || approval.overallStatus === "rejected") {
+    const responder = await User.findById(approverId);
+    if (!responder || responder.role !== "admin") {
+      throw Object.assign(new Error("Pengajuan sudah selesai, tidak bisa diubah"), { statusCode: 403 });
+    }
+  }
+
+  const approver = approval.approvers.find(a => a.userId === approverId);
+  if (!approver) throw Object.assign(new Error("Anda bukan peninjau"), { statusCode: 403 });
+
+  if (data.reason !== undefined) approver.reason = data.reason;
+  if (data.status) approver.status = data.status;
+  if (data.attachmentUrls && data.attachmentUrls.length > 0) {
+    approver.attachmentUrl = [...(approver.attachmentUrl || []), ...data.attachmentUrls];
+  }
+  approver.reviewedAt = new Date();
+
+  const allApproved = approval.approvers.every(a => a.status === "approved");
+  const anyRejected = approval.approvers.some(a => a.status === "rejected");
+  if (allApproved) approval.overallStatus = "approved";
+  else if (anyRejected) approval.overallStatus = "rejected";
+  else approval.overallStatus = "reviewing";
+
+  await approval.save();
+  return approval;
+};
+
+exports.resetResponse = async (id, approverId) => {
+  const approval = await Approval.findById(id);
+  if (!approval) throw Object.assign(new Error("Tidak ditemukan"), { statusCode: 404 });
+  const approver = approval.approvers.find(a => a.userId === approverId);
+  if (!approver) throw Object.assign(new Error("Anda bukan peninjau"), { statusCode: 403 });
+
+  approver.status = "pending";
+  approver.reason = "";
+  approver.attachmentUrl = [];
+  approver.reviewedAt = null;
+
+  const anyRejected = approval.approvers.some(a => a.status === "rejected");
+  const allApproved = approval.approvers.every(a => a.status === "approved");
+  if (allApproved) approval.overallStatus = "approved";
+  else if (anyRejected) approval.overallStatus = "rejected";
+  else approval.overallStatus = "reviewing";
+
+  await approval.save();
+  return approval;
+};
+
+exports.remove = async (id, userId, userRole, userPosition) => {
+  const approval = await Approval.findById(id);
+  if (!approval) throw Object.assign(new Error("Tidak ditemukan"), { statusCode: 404 });
+
+  const isOwner = approval.requesterId === userId;
+  const isAdminRole = userRole === "admin";
+  let hasApproveAccess = false;
+  if (userPosition) {
+    const pa = await PositionAccess.findOne({ position: userPosition });
+    if (pa && pa.menus && pa.menus.approve === true) hasApproveAccess = true;
+  }
+
+  if (!isOwner && !isAdminRole && !hasApproveAccess) {
+    throw Object.assign(new Error("Tidak bisa menghapus"), { statusCode: 403 });
+  }
+
   await Approval.findByIdAndDelete(id);
   return { message: "Berhasil dihapus" };
 };

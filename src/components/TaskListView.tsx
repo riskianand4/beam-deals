@@ -8,16 +8,12 @@ import { id as localeID } from "date-fns/locale";
 import { motion } from "framer-motion";
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: "Akan Dikerjakan",
-  "in-progress": "Sedang Dikerjakan",
-  "needs-review": "Ditinjau",
+  todo: "Tugas",
   completed: "Selesai",
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
   todo: "bg-muted text-muted-foreground",
-  "in-progress": "bg-primary",
-  "needs-review": "bg-warning/10 text-warning",
   completed: "bg-success/10 text-success",
 };
 
@@ -25,12 +21,14 @@ const PRIORITY_STYLES: Record<string, string> = {
   high: "bg-destructive/10 text-destructive",
   medium: "bg-warning/10 text-warning",
   low: "bg-muted text-muted-foreground",
+  none: "",
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
   high: "Tinggi",
   medium: "Sedang",
   low: "Rendah",
+  none: "",
 };
 
 interface Props {
@@ -88,7 +86,7 @@ const TaskListView = ({ tasks, onTaskClick, isAdmin }: Props) => {
                       <div className="flex items-center gap-3">
                         {isAdmin && assignee && (
                           <Avatar className="w-7 h-7 shrink-0 shadow-sm border border-border/50">
-                            <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold uppercase">
+                            <AvatarFallback className="bg-primary/10  text-[10px] font-bold uppercase">
                               {assignee.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                             </AvatarFallback>
                           </Avatar>
@@ -108,10 +106,13 @@ const TaskListView = ({ tasks, onTaskClick, isAdmin }: Props) => {
 
                     {/* Prioritas */}
                     <td className="px-4 py-3 align-middle">
-                      <Badge variant="secondary" className={`text-[10px] font-medium shadow-none border-0 ${PRIORITY_STYLES[task.priority]}`}>
-                        <Flag className="w-3 h-3 mr-1.5" />
-                        {PRIORITY_LABELS[task.priority]}
-                      </Badge>
+                      {task.priority !== "none" ? (
+                        <Badge variant="secondary" className={`text-[10px] font-medium shadow-none border-0 ${PRIORITY_STYLES[task.priority]}`}>
+                          {PRIORITY_LABELS[task.priority]}
+                        </Badge>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">—</span>
+                      )}
                     </td>
 
                     {/* Tenggat */}

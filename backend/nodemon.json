@@ -1,0 +1,11 @@
+{
+  "watch": ["src"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": [
+    "wa-session/**",
+    "uploads/**",
+    "node_modules/**",
+    "*.test.js"
+  ],
+  "delay": "500"
+}

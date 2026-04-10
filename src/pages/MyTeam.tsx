@@ -44,7 +44,7 @@ const MyTeam = () => {
   }, [fetchTeams]);
 
   const myTeams = useMemo(
-    () => teamGroups.filter((t) => user && t.memberIds.includes(user.id)),
+    () => teamGroups.filter((t) => user && (t.memberIds.includes(user.id) || (t.supervisorIds || []).includes(user.id))),
     [teamGroups, user],
   );
 
@@ -186,9 +186,7 @@ const MyTeam = () => {
                             <div className="flex-1">
                               <div className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                                 {leader.name}
-                                <Badge variant="outline" className="text-[9px] border-warning/30 text-warning px-1.5 py-0">
-                                  Ketua
-                                </Badge>
+                       
                               </div>
                               <p className="text-[11px] text-muted-foreground">
                                 {leader.position} — {leader.department}

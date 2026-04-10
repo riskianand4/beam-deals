@@ -10,7 +10,8 @@ const attendanceSchema = new mongoose.Schema({
   breakIn: { type: String, default: null },
   overtimeIn: { type: String, default: null },
   overtimeOut: { type: String, default: null },
-  status: { type: String, enum: ["present", "late", "absent", "leave"], default: "present" },
+  status: { type: String, default: "present" },
+  justificationPermanent: { type: Boolean, default: false },
   location: { type: String, default: "" },
   reason: { type: String, default: "" },
   proofImage: { type: String, default: "" },
@@ -23,6 +24,7 @@ const attendanceSchema = new mongoose.Schema({
   isMask: { type: Number, default: 0 },
   bodyTemp: { type: Number, default: 0 },
   source: { type: String, enum: ["manual", "webhook", "import"], default: "manual" },
+  justification: { type: String, default: "" },
 }, { timestamps: true });
 
 attendanceSchema.methods.toJSON = function () {

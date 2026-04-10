@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/vaultController");
-const { auth, adminOnly } = require("../middleware/auth");
+const { auth, adminOrAccess } = require("../middleware/auth");
 
 // Company links
 router.get("/links", auth, ctrl.getCompanyLinks);
-router.post("/links", auth, adminOnly, ctrl.createCompanyLink);
-router.put("/links/:id", auth, adminOnly, ctrl.updateCompanyLink);
-router.delete("/links/:id", auth, adminOnly, ctrl.deleteCompanyLink);
+router.post("/links", auth, adminOrAccess("vault"), ctrl.createCompanyLink);
+router.put("/links/:id", auth, adminOrAccess("vault"), ctrl.updateCompanyLink);
+router.delete("/links/:id", auth, adminOrAccess("vault"), ctrl.deleteCompanyLink);
 
 // Personal credentials
 router.get("/credentials", auth, ctrl.getCredentials);

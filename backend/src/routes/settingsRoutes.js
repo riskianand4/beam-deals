@@ -10,5 +10,7 @@ router.put("/position-access", auth, adminOnly, ctrl.updatePositionAccess);
 router.get("/positions", auth, ctrl.getPositions);
 router.post("/positions", auth, adminOnly, ctrl.createPosition);
 router.delete("/positions/:id", auth, adminOnly, ctrl.deletePosition);
+router.get("/notification-channels", auth, adminOnly, ctrl.getNotificationChannels);
+router.put("/notification-channels", auth, adminOnly, ctrl.updateNotificationChannels);
 
 module.exports = router;

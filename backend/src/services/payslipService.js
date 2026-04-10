@@ -1,4 +1,5 @@
 const Payslip = require("../models/Payslip");
+const notificationService = require("./notificationService");
 
 exports.getAll = async (query = {}) => {
   const filter = {};
@@ -15,7 +16,22 @@ exports.getById = async (id) => {
 };
 
 exports.create = async (data) => {
-  return Payslip.create(data);
+  const payslip = await Payslip.create(data);
+
+  // Notify the employee
+  try {
+    const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    await notificationService.createForUsers([data.userId], {
+      title: "Slip Gaji Baru",
+      message: `Slip gaji ${monthNames[data.month - 1] || ""} ${data.year} telah tersedia`,
+      type: "info",
+      category: "payslip",
+    });
+  } catch (err) {
+    console.error("Failed to notify about payslip:", err);
+  }
+
+  return payslip;
 };
 
 exports.update = async (id, data) => {

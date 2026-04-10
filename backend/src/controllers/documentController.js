@@ -16,7 +16,7 @@ exports.prepareDocUpload = async (req, res, next) => {
     if (userId) {
       const user = await User.findById(userId);
       if (user) {
-        req.uploadContext = "user";
+        req.uploadContext = "document";
         req.uploadUserMeta = { position: user.position, name: user.name };
       }
     }

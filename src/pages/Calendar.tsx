@@ -81,7 +81,7 @@ const CalendarPage = () => {
                     selected
                       ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
                       : today
-                      ? "bg-primary/10 text-primary font-bold"
+                      ? "bg-primary/10  font-bold"
                       : "hover:bg-muted text-foreground"
                   }`}
                 >
@@ -125,11 +125,10 @@ const CalendarPage = () => {
                       <p className="text-sm font-medium text-foreground">{task.title}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <Badge variant="secondary" className={`text-[10px] ${PRIORITY_COLORS[task.priority]}`}>
-                          <Flag className="w-2.5 h-2.5 mr-1" />
                           {task.priority === "high" ? "Tinggi" : task.priority === "medium" ? "Sedang" : "Rendah"}
                         </Badge>
                         <Badge variant="secondary" className="text-[10px] capitalize">
-                          {task.status === "todo" ? "Akan Dikerjakan" : task.status === "in-progress" ? "Sedang Dikerjakan" : task.status === "needs-review" ? "Perlu Ditinjau" : "Selesai"}
+                          {task.status === "todo" ? "Tugas" : "Selesai"}
                         </Badge>
                       </div>
                     </div>

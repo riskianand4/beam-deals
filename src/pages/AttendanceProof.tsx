@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const STATUS_LABEL: Record<string, string> = { present: "Hadir", late: "Terlambat", absent: "Tidak Hadir", leave: "Cuti/Izin" };
-const STATUS_BADGE: Record<string, string> = { present: "bg-success/10 text-success border-success/20", late: "bg-warning/10 text-warning border-warning/20", absent: "bg-destructive/10 text-destructive border-destructive/20", leave: "bg-primary/10 text-primary border-primary/20" };
+const STATUS_BADGE: Record<string, string> = { present: "bg-success/10 text-success border-success/20", late: "bg-warning/10 text-warning border-warning/20", absent: "bg-destructive/10 text-destructive border-destructive/20", leave: "bg-primary/10  border-primary/20" };
 const REASON_LABEL: Record<string, string> = { izin: "Izin", sakit: "Sakit", alpa: "Alpa", "dinas luar": "Dinas Luar" };
 
 const AttendanceProof = () => {

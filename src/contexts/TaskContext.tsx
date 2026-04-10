@@ -5,9 +5,8 @@ import type { Task, TaskNote, TaskStatus } from "@/types";
 interface TaskContextType {
   tasks: Task[];
   loading: boolean;
-  updateTaskStatus: (taskId: string, status: TaskStatus, reviewerIds?: string[]) => Promise<void>;
-  reviewTask: (taskId: string, action: "approved" | "rejected", reason?: string) => Promise<void>;
-  addTaskNote: (taskId: string, note: Omit<TaskNote, "id">) => Promise<void>;
+  updateTaskStatus: (taskId: string, status: TaskStatus) => Promise<void>;
+  addTaskNote: (taskId: string, formData: FormData) => Promise<void>;
   addTask: (task: Partial<Task>) => Promise<void>;
   updateTask: (taskId: string, updates: Partial<Omit<Task, "id">>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -37,18 +36,13 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     else setLoading(false);
   }, [refreshTasks]);
 
-  const updateTaskStatus = useCallback(async (taskId: string, status: TaskStatus, reviewerIds?: string[]) => {
-    const updated = await api.updateTaskStatus(taskId, status, reviewerIds);
+  const updateTaskStatus = useCallback(async (taskId: string, status: TaskStatus) => {
+    const updated = await api.updateTaskStatus(taskId, status);
     setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
   }, []);
 
-  const reviewTask = useCallback(async (taskId: string, action: "approved" | "rejected", reason?: string) => {
-    const updated = await api.reviewTask(taskId, action, reason);
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
-  }, []);
-
-  const addTaskNote = useCallback(async (taskId: string, note: Omit<TaskNote, "id">) => {
-    const updated = await api.addTaskNote(taskId, { text: note.text, authorId: note.authorId });
+  const addTaskNote = useCallback(async (taskId: string, formData: FormData) => {
+    const updated = await api.addTaskNote(taskId, formData);
     setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
   }, []);
 
@@ -68,7 +62,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <TaskContext.Provider value={{ tasks, loading, updateTaskStatus, reviewTask, addTaskNote, addTask, updateTask, deleteTask, refreshTasks }}>
+    <TaskContext.Provider value={{ tasks, loading, updateTaskStatus, addTaskNote, addTask, updateTask, deleteTask, refreshTasks }}>
       {children}
     </TaskContext.Provider>
   );

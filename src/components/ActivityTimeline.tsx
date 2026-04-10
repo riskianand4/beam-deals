@@ -18,7 +18,7 @@ const ICON_MAP: Record<string, typeof CheckCircle2> = {
 
 const COLOR_MAP: Record<string, string> = {
   task_completed: "text-success bg-success/10",
-  task_created: " bg-primary",
+  task_created: "text-primary-foreground bg-primary",
   task_assigned: "text-violet-600 bg-violet-800/20",
   note_added: "text-amber-600 bg-amber-800/20",
   status_changed: "text-cyan-600 bg-cyan-800/20",
@@ -53,7 +53,7 @@ const ActivityTimeline = () => {
         <tbody>
           {activities.slice(0, 10).map((activity, i) => {
             const Icon = ICON_MAP[activity.type] || PlusCircle;
-            const colorClass = COLOR_MAP[activity.type] || "text-primary bg-primary/10";
+            const colorClass = COLOR_MAP[activity.type] || " bg-primary/10";
             const typeLabel = TYPE_LABEL[activity.type] || activity.type;
 
             return (

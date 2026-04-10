@@ -3,6 +3,7 @@ const LeaveRequest = require("../models/LeaveRequest");
 const LeaveBalance = require("../models/LeaveBalance");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
+const notificationService = require("./notificationService");
 
 const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -38,24 +39,33 @@ exports.getAttendance = async (query = {}) => {
 exports.clockIn = async (userId, location) => {
   const date = new Date().toISOString().split("T")[0];
   const time = new Date().toTimeString().slice(0, 5);
-  const isLate = time > "08:00";
 
   let record = await Attendance.findOne({ userId, date });
   if (record && record.clockIn) throw Object.assign(new Error("Sudah clock in hari ini"), { statusCode: 400 });
 
   const user = await User.findById(userId);
   const userName = user ? user.name : "";
+  const userOffice = user ? user.office || "" : "";
+
+  // Check for permanent justification from previous record
+  const prevRecord = await Attendance.findOne({ userId, justificationPermanent: true }).sort({ date: -1 });
+  const justFields = prevRecord ? { justification: prevRecord.justification, justificationPermanent: true } : {};
 
   if (record) {
     record.clockIn = time;
-    record.status = isLate ? "late" : "present";
-    record.location = location;
+    record.status = "clock_in";
+    record.location = location || userOffice;
     record.userName = userName;
     record.source = "manual";
+    if (justFields.justification) {
+      record.justification = justFields.justification;
+      record.justificationPermanent = true;
+    }
     await record.save();
   } else {
     record = await Attendance.create({
-      userId, date, clockIn: time, status: isLate ? "late" : "present", location, userName, source: "manual",
+      userId, date, clockIn: time, status: "clock_in", location: location || userOffice, userName, source: "manual",
+      ...justFields,
     });
   }
   return record;
@@ -70,6 +80,9 @@ exports.clockOut = async (userId) => {
   if (record.clockOut) throw Object.assign(new Error("Sudah clock out"), { statusCode: 400 });
 
   record.clockOut = time;
+  // Determine final status based on clock in time
+  const isLate = record.clockIn > "09:00";
+  record.status = isLate ? "late" : "present";
   await record.save();
   return record;
 };
@@ -118,12 +131,25 @@ exports.processWebhook = async (payload) => {
     location,
   };
 
+  // Check for permanent justification
+  const prevRecord = await Attendance.findOne({ userId: resolvedUserId, justificationPermanent: true }).sort({ date: -1 });
+  const justFields = prevRecord ? { justification: prevRecord.justification, justificationPermanent: true } : {};
+
   if (existingRecord) {
     existingRecord[timeField] = clockTime;
     Object.assign(existingRecord, webhookFields);
 
     if (stateStr === "0") {
-      existingRecord.status = clockTime > "09:00" ? "late" : "present";
+      existingRecord.status = "clock_in";
+    } else if (stateStr === "1") {
+      const isLate = existingRecord.clockIn > "09:00";
+      existingRecord.status = isLate ? "late" : "present";
+    }
+
+    // Apply permanent justification if not already set
+    if (justFields.justification && !existingRecord.justification) {
+      existingRecord.justification = justFields.justification;
+      existingRecord.justificationPermanent = true;
     }
 
     await existingRecord.save();
@@ -132,12 +158,12 @@ exports.processWebhook = async (payload) => {
     return { success: true, message: `${stateLabels[stateStr] || "Record"} berhasil`, record: existingRecord };
   }
 
-  const isLate = stateStr === "0" && clockTime > "09:00";
   const newData = {
     userId: resolvedUserId,
     date: datePart,
-    status: isLate ? "late" : "present",
+    status: stateStr === "0" ? "clock_in" : "present",
     ...webhookFields,
+    ...justFields,
   };
   newData[timeField] = clockTime;
 
@@ -201,6 +227,13 @@ exports.createManual = async (data) => {
   return Attendance.create({ ...data, source: "manual" });
 };
 
+// Delete attendance record
+exports.deleteAttendance = async (id) => {
+  const record = await Attendance.findByIdAndDelete(id);
+  if (!record) throw Object.assign(new Error("Record tidak ditemukan"), { statusCode: 404 });
+  return { message: "Data kehadiran berhasil dihapus" };
+};
+
 // Leave requests
 exports.getLeaveRequests = async (query = {}) => {
   const filter = {};
@@ -221,11 +254,12 @@ exports.approveLeaveRequest = async (id, adminId, status) => {
   await req.save();
 
   const statusLabel = status === "approved" ? "disetujui" : "ditolak";
-  await Notification.create({
+  await notificationService.create({
     userId: req.userId,
     title: `Pengajuan Cuti ${status === "approved" ? "Disetujui" : "Ditolak"}`,
     message: `Pengajuan cuti Anda telah ${statusLabel}`,
     type: status === "approved" ? "success" : "warning",
+    category: "attendance",
   });
 
   return req;
@@ -242,4 +276,180 @@ exports.getLeaveBalance = async (userId) => {
 
 exports.getLeaveBalances = async () => {
   return LeaveBalance.find();
+};
+
+// Excluded employees
+const ExcludedEmployee = require("../models/ExcludedEmployee");
+
+exports.getExcludedEmployees = async () => {
+  return ExcludedEmployee.find().sort({ createdAt: -1 });
+};
+
+exports.addExcludedEmployee = async (data) => {
+  const existing = await ExcludedEmployee.findOne({ userId: data.userId });
+  if (existing) throw Object.assign(new Error("Karyawan sudah ada dalam daftar"), { statusCode: 400 });
+  return ExcludedEmployee.create(data);
+};
+
+exports.removeExcludedEmployee = async (id) => {
+  const doc = await ExcludedEmployee.findByIdAndDelete(id);
+  if (!doc) throw Object.assign(new Error("Data tidak ditemukan"), { statusCode: 404 });
+  return { message: "Berhasil dihapus" };
+};
+
+// Justification suggestions (autocomplete)
+exports.getJustificationSuggestions = async () => {
+  return Attendance.distinct("justification", { justification: { $ne: "" }, justification: { $exists: true } });
+};
+
+// Holidays CRUD
+const Holiday = require("../models/Holiday");
+
+exports.getHolidays = async () => {
+  return Holiday.find().sort({ date: 1 });
+};
+
+exports.createHoliday = async (data) => {
+  const existing = await Holiday.findOne({ date: data.date });
+  if (existing) throw Object.assign(new Error("Tanggal libur sudah ada"), { statusCode: 400 });
+  return Holiday.create(data);
+};
+
+exports.deleteHoliday = async (id) => {
+  const doc = await Holiday.findByIdAndDelete(id);
+  if (!doc) throw Object.assign(new Error("Data tidak ditemukan"), { statusCode: 404 });
+  return { message: "Hari libur berhasil dihapus" };
+};
+
+// Absent salary calculation
+const Payslip = require("../models/Payslip");
+
+exports.getAbsentSalary = async (userId) => {
+  // Find latest payslip for this user
+  const latestPayslip = await Payslip.findOne({ userId }).sort({ createdAt: -1 });
+  
+  const filter = { userId };
+  if (latestPayslip) {
+    // Only count records after the latest payslip was created
+    const payslipDate = latestPayslip.createdAt.toISOString().split("T")[0];
+    filter.date = { $gt: payslipDate };
+  }
+  
+  // Count records where both clockIn and clockOut exist
+  const records = await Attendance.find({
+    ...filter,
+    clockIn: { $ne: null, $exists: true },
+    clockOut: { $ne: null, $exists: true },
+    status: { $in: ["present", "late"] },
+  });
+  
+  const dailyRate = 50000;
+  const days = records.length;
+  const total = days * dailyRate;
+  
+  return { days, dailyRate, total, since: latestPayslip ? latestPayslip.createdAt : null };
+};
+
+// Export PDF — receives pre-filtered records from frontend
+exports.generatePDF = async (records, dateLabel, logoPath) => {
+  // Build status labels from DB + fallback
+  const dbStatuses = await AttendanceStatus.find();
+  const statusLabel = {
+    present: "Hadir", late: "Terlambat", absent: "Alpa", leave: "Cuti/Izin",
+    izin: "Izin", sakit: "Sakit", "---": "---", clock_in: "Clock In", clock_out: "Clock Out",
+  };
+  for (const s of dbStatuses) { statusLabel[s.name] = s.label; }
+
+  const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "-";
+
+  const logoImg = logoPath ? `<img src="${logoPath}" class="logo-hd" />` : "";
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: Arial, sans-serif; font-size: 11px; margin: 20px; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+  .header h2 { margin: 0; font-size: 16px; }
+  .header .subtitle { color: #666; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f5f5f5; font-weight: bold; font-size: 10px; }
+  td { font-size: 10px; }
+  .footer { margin-top: 15px; text-align: right; font-size: 9px; color: #999; }
+  .logo-hd { height: 55px; object-fit: contain; image-rendering: crisp-edges; }
+</style></head><body>
+  <div class="header">
+    <div>
+      <h2>Daftar Hadir Karyawan</h2>
+      <p class="subtitle">Tanggal: ${dateLabel || "-"}</p>
+    </div>
+    <div>${logoImg}</div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>No</th><th>Nama</th><th>Masuk</th><th>Pulang</th><th>Status</th><th>Kantor</th><th>Justifikasi</th>
+    </tr></thead>
+    <tbody>
+      ${(records || []).map((r, i) => `<tr>
+        <td>${i + 1}</td>
+        <td>${(r.employeeName || r.userName || "-").toUpperCase()}</td>
+        <td>${r.clockIn || "-"}</td>
+        <td>${r.clockOut || "-"}</td>
+        <td>${statusLabel[r.status] || r.status}</td>
+        <td>${(r.location || "-").toUpperCase()}</td>
+        <td>${r.justification || "-"}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>
+  <div class="footer">Dicetak pada: ${new Date().toLocaleString("id-ID")}</div>
+</body></html>`;
+
+  const puppeteer = require("puppeteer");
+  const browser = await puppeteer.launch({
+    headless: "new",
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: "networkidle0" });
+  const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "15mm", bottom: "15mm", left: "10mm", right: "10mm" } });
+  await browser.close();
+  return pdfBuffer;
+};
+
+// ========== Custom Attendance Statuses ==========
+const AttendanceStatus = require("../models/AttendanceStatus");
+
+const DEFAULT_STATUSES = [
+  { name: "present", label: "Hadir", isDefault: true },
+  { name: "late", label: "Terlambat", isDefault: true },
+  { name: "absent", label: "Alpa", isDefault: true },
+  { name: "izin", label: "Izin", isDefault: true },
+  { name: "sakit", label: "Sakit", isDefault: true },
+  { name: "---", label: "---", isDefault: true },
+  { name: "clock_in", label: "Clock In", isDefault: true },
+  { name: "clock_out", label: "Clock Out", isDefault: true },
+  { name: "leave", label: "Cuti/Izin", isDefault: true },
+];
+
+exports.getStatuses = async () => {
+  let statuses = await AttendanceStatus.find().sort({ isDefault: -1, label: 1 });
+  if (statuses.length === 0) {
+    // Seed defaults
+    await AttendanceStatus.insertMany(DEFAULT_STATUSES);
+    statuses = await AttendanceStatus.find().sort({ isDefault: -1, label: 1 });
+  }
+  return statuses;
+};
+
+exports.createStatus = async (data) => {
+  const existing = await AttendanceStatus.findOne({ name: data.name });
+  if (existing) throw Object.assign(new Error("Status sudah ada"), { statusCode: 400 });
+  return AttendanceStatus.create({ name: data.name, label: data.label || data.name, isDefault: false });
+};
+
+exports.deleteStatus = async (id) => {
+  const status = await AttendanceStatus.findById(id);
+  if (!status) throw Object.assign(new Error("Status tidak ditemukan"), { statusCode: 404 });
+  if (status.isDefault) throw Object.assign(new Error("Status default tidak bisa dihapus"), { statusCode: 400 });
+  await AttendanceStatus.findByIdAndDelete(id);
+  return { message: "Status berhasil dihapus" };
 };

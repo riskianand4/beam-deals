@@ -34,6 +34,10 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Accounts = lazy(() => import("./pages/Accounts"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Approval = lazy(() => import("./pages/Approval"));
+const Partner = lazy(() => import("./pages/Partner"));
+const Announcements = lazy(() => import("./pages/Announcements"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Explorer = lazy(() => import("./pages/Explorer"));
 
 const queryClient = new QueryClient();
 
@@ -117,12 +121,17 @@ const AppRoutes = () => {
         <Route path="/messages/:employeeId" element={<SP><Messages /></SP>} />
 
         <Route path="/profile" element={<SP><Profile /></SP>} />
+        <Route path="/profile/:userId" element={<SP><Profile /></SP>} />
         <Route path="/team" element={<SP><TeamPage /></SP>} />
         <Route path="/team/:teamId" element={<AdminRoute><SP><TeamDetail /></SP></AdminRoute>} />
         <Route path="/settings" element={<SP><Settings /></SP>} />
         <Route path="/accounts" element={<AdminRoute><SP><Accounts /></SP></AdminRoute>} />
         <Route path="/activity" element={<SP><ActivityLog /></SP>} />
         <Route path="/approval" element={<SP><Approval /></SP>} />
+        <Route path="/partner" element={<SP><Partner /></SP>} />
+        <Route path="/pengumuman" element={<SP><Announcements /></SP>} />
+        <Route path="/notifications" element={<SP><Notifications /></SP>} />
+        <Route path="/explorer" element={<SP><Explorer /></SP>} />
       </Route>
       <Route path="*" element={<SP><NotFound /></SP>} />
     </Routes>

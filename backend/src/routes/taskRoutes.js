@@ -9,9 +9,9 @@ router.get("/:id", auth, ctrl.getById);
 router.post("/", auth, ctrl.create);
 router.put("/:id", auth, ctrl.update);
 router.put("/:id/status", auth, ctrl.updateStatus);
-router.put("/:id/review", auth, ctrl.reviewTask);
-router.post("/:id/attachments", auth, upload.array("files", 10), ctrl.uploadAttachments);
-router.post("/:id/notes", auth, ctrl.addNote);
+router.post("/:id/notes", auth, upload.array("files", 5), ctrl.addNote);
+router.put("/:id/notes/:noteId", auth, ctrl.editNote);
+router.delete("/:id/notes/:noteId", auth, ctrl.deleteNote);
 router.delete("/:id", auth, ctrl.remove);
 
 module.exports = router;

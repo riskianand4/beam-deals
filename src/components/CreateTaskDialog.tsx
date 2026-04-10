@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Priority, TaskAttachment, TeamGroup } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMenuSettings } from "@/contexts/MenuSettingsContext";
 import { useTasks } from "@/contexts/TaskContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -24,18 +25,25 @@ interface CreateTaskDialogProps {
 const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProps) => {
   const { addTask } = useTasks();
   const { users, isAdmin } = useAuth();
+  const { hasAccess } = useMenuSettings();
+  const hasTasksAccess = hasAccess("tasks");
   const employees = users.filter((u) => u.role === "employee");
 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
-  const [priority, setPriority] = useState<Priority>("medium");
+  const [priority, setPriority] = useState<Priority>("none");
   const [deadline, setDeadline] = useState("");
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
-  const [taskType, setTaskType] = useState<"personal" | "team">(isLeader && !isAdmin ? "team" : "personal");
+  const [taskType, setTaskType] = useState<"personal" | "team">((isLeader && !isAdmin && !hasTasksAccess) ? "team" : "personal");
   const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [teamSearch, setTeamSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredEmployees = employees.filter(u => !employeeSearch || u.name.toLowerCase().includes(employeeSearch.toLowerCase()));
+  const filteredTeams = teams.filter(t => !teamSearch || t.name.toLowerCase().includes(teamSearch.toLowerCase()));
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -75,7 +83,7 @@ const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProp
       notes: [],
       attachments,
     });
-    setTitle(""); setDescription(""); setAssigneeId(""); setPriority("medium"); setDeadline(""); setAttachments([]);
+    setTitle(""); setDescription(""); setAssigneeId(""); setPriority("none"); setDeadline(""); setAttachments([]);
     setTaskType("personal"); setSelectedTeamId("");
     setOpen(false);
   };
@@ -83,24 +91,23 @@ const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProp
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Tugas Baru</Button>
+        <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /></Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Buat Tugas</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Task type selector — show for admin or leader */}
-          {(isAdmin || isLeader) && teams.length > 0 && (
+          {(isAdmin || hasTasksAccess || isLeader) && teams.length > 0 && (
             <div className="space-y-1">
               <Label className="text-sm">Tipe Tugas</Label>
-              {isLeader && !isAdmin ? (
-                // Leader only sees team option
-                <div className="text-sm text-muted-foreground py-2 px-3 rounded-md bg-muted">Tugas Tim</div>
+              {isLeader && !isAdmin && !hasTasksAccess ? (
+                <div className="text-sm text-muted-foreground py-2 px-3 rounded-md bg-muted">Tugas Team</div>
               ) : (
                 <Select value={taskType} onValueChange={(v) => setTaskType(v as "personal" | "team")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="personal">karyawan</SelectItem>
-                    <SelectItem value="team">Tim</SelectItem>
+                    <SelectItem value="personal">Karyawan</SelectItem>
+                    <SelectItem value="team">Team</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -113,16 +120,19 @@ const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProp
           </div>
           <div className="space-y-1">
             <Label className="text-sm">Deskripsi</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-[60px]" />
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-[60px]" placeholder="Mendukung format Markdown" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {taskType === "personal" && isAdmin && (
+            {taskType === "personal" && (isAdmin || hasTasksAccess) && (
               <div className="space-y-1">
                 <Label className="text-sm">Ditugaskan Kepada</Label>
                 <Select value={assigneeId} onValueChange={setAssigneeId}>
                   <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
-                  <SelectContent className=" max-h-56">
-                    {employees.map((u) => (<SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>))}
+                  <SelectContent className="max-h-56">
+                    <div className="p-2">
+                      <Input placeholder="Cari karyawan..." value={employeeSearch} onChange={e => setEmployeeSearch(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    {filteredEmployees.map((u) => (<SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
               </div>
@@ -132,8 +142,11 @@ const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProp
                 <Label className="text-sm">Pilih Tim</Label>
                 <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
                   <SelectTrigger><SelectValue placeholder="Pilih tim..." /></SelectTrigger>
-                  <SelectContent>
-                    {teams.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
+                  <SelectContent className="max-h-56">
+                    <div className="p-2">
+                      <Input placeholder="Cari tim..." value={teamSearch} onChange={e => setTeamSearch(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    {filteredTeams.map((t) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
               </div>
@@ -143,6 +156,7 @@ const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProp
               <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Tanpa Prioritas</SelectItem>
                   <SelectItem value="high">Tinggi</SelectItem>
                   <SelectItem value="medium">Sedang</SelectItem>
                   <SelectItem value="low">Rendah</SelectItem>
@@ -152,7 +166,7 @@ const CreateTaskDialog = ({ teams = [], isLeader = false }: CreateTaskDialogProp
           </div>
           <div className="space-y-1">
             <Label className="text-sm">Tenggat Waktu</Label>
-            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} required />
+            <Input type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} required />
           </div>
 
           {/* File Attachments */}

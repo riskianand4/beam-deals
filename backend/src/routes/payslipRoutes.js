@@ -7,6 +7,7 @@ const upload = require("../middleware/upload");
 router.get("/", auth, ctrl.getAll);
 router.get("/:id", auth, ctrl.getById);
 router.post("/", auth, adminOnly, upload.single("pdf"), ctrl.create);
+router.post("/bulk", auth, adminOnly, upload.array("pdfs", 50), ctrl.bulkCreate);
 router.put("/:id", auth, adminOnly, upload.single("pdf"), ctrl.update);
 router.delete("/:id", auth, adminOnly, ctrl.remove);
 

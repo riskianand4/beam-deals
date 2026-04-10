@@ -6,30 +6,50 @@ const config = require("../config/env");
 const baseUploadDir = path.join(__dirname, "../../", config.uploadDir);
 if (!fs.existsSync(baseUploadDir)) fs.mkdirSync(baseUploadDir, { recursive: true });
 
-// Helper: sanitize folder name
 const sanitize = (str) => (str || "unknown").replace(/[^a-zA-Z0-9_\-. ]/g, "_").trim();
 
-// Dynamic storage - determines path based on request context
+const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+const CONTEXT_FOLDERS = {
+  payslip: "slip-gaji",
+  approval: "pengajuan",
+  task: "tugas",
+  message: "ruang",
+  note: "catatan",
+  document: "dokumen",
+  avatar: "profil",
+  user: "dokumen",
+  explorer: "explorer",
+};
+
 const dynamicStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    let destDir = baseUploadDir;
+    const now = new Date();
+    const year = String(now.getFullYear());
+    const month = MONTH_NAMES[now.getMonth()];
+    const context = req.uploadContext || "general";
+    const folder = CONTEXT_FOLDERS[context] || context;
 
-    // Task attachments go to uploads/Tugas/
-    if (req.baseUrl?.includes("/tasks") || req.uploadContext === "task") {
-      destDir = path.join(baseUploadDir, "Tugas");
-    }
-    // User files go to uploads/{position}/{username}/
-    else if (req.uploadContext === "user" && req.uploadUserMeta) {
-      const position = sanitize(req.uploadUserMeta.position);
+    let destDir;
+
+    if (context === "avatar") {
+      // Avatars: uploads/{year}/{month}/{name}/profil/
+      const name = sanitize(req.uploadUserMeta?.name || "unknown");
+      destDir = path.join(baseUploadDir, year, month, name, "profil");
+    } else if (req.uploadUserMeta?.name) {
+      // Structured: uploads/{year}/{month}/{employee-name}/{category}/
       const name = sanitize(req.uploadUserMeta.name);
-      destDir = path.join(baseUploadDir, position, name);
+      destDir = path.join(baseUploadDir, year, month, name, folder);
+    } else if (context === "task") {
+      destDir = path.join(baseUploadDir, year, month, "tugas");
+    } else {
+      destDir = path.join(baseUploadDir, year, month, folder);
     }
 
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
     cb(null, destDir);
   },
   filename: (req, file, cb) => {
-    // For avatar uploads, use fixed name
     if (req.uploadContext === "avatar") {
       const ext = path.extname(file.originalname) || ".jpg";
       cb(null, "avatar" + ext);
@@ -41,10 +61,12 @@ const dynamicStorage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|gif|pdf|doc|docx/;
-  const extname = allowed.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowed.test(file.mimetype);
-  if (extname && mimetype) return cb(null, true);
+  const allowed = /jpeg|jpg|png|gif|svg|webp|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z|mp4|mp3|wav|ogg|webm|json|xml|heic|heif|bmp|tiff|rtf|odt|ods|odp/;
+  const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
+  if (allowed.test(ext)) return cb(null, true);
+  if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/") || file.mimetype.startsWith("audio/") || file.mimetype.startsWith("text/") || file.mimetype.includes("pdf") || file.mimetype.includes("document") || file.mimetype.includes("sheet") || file.mimetype.includes("presentation") || file.mimetype.includes("zip") || file.mimetype.includes("compressed") || file.mimetype.includes("octet-stream")) {
+    return cb(null, true);
+  }
   cb(new Error("Tipe file tidak didukung"));
 };
 

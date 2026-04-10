@@ -178,3 +178,8 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+::view-transition-old(root), ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}

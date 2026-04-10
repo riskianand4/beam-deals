@@ -10,9 +10,11 @@ const menuSettingSchema = new mongoose.Schema({
   notes: { type: Boolean, default: false },
   reports: { type: Boolean, default: false },
   accounts: { type: Boolean, default: false },
-  review: { type: Boolean, default: false },
+  tasks: { type: Boolean, default: false },
   approve: { type: Boolean, default: false },
   viewApproval: { type: Boolean, default: false },
+  mitra: { type: Boolean, default: false },
+  explorer: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model("MenuSetting", menuSettingSchema);

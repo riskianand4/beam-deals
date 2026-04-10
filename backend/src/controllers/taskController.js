@@ -1,4 +1,16 @@
 const taskService = require("../services/taskService");
+const User = require("../models/User");
+
+exports.prepareUpload = async (req, res, next) => {
+  try {
+    req.uploadContext = "task";
+    if (req.userId) {
+      const u = await User.findById(req.userId);
+      if (u) req.uploadUserMeta = { name: u.name, position: u.position };
+    }
+    next();
+  } catch (err) { next(err); }
+};
 
 exports.getAll = async (req, res, next) => {
   try { res.json(await taskService.getAll(req.query, { id: req.userId, role: req.user.role })); } catch (err) { next(err); }
@@ -24,38 +36,39 @@ exports.updateStatus = async (req, res, next) => {
     res.json(await taskService.updateStatus(
       req.params.id,
       req.body.status,
-      { id: req.userId, name: req.user.name, role: req.user.role },
-      req.body.reviewerIds || (req.body.reviewerId ? [req.body.reviewerId] : [])
-    ));
-  } catch (err) { next(err); }
-};
-
-exports.reviewTask = async (req, res, next) => {
-  try {
-    res.json(await taskService.reviewTask(
-      req.params.id,
-      req.body.action,
-      req.body.reason || "",
       { id: req.userId, name: req.user.name, role: req.user.role }
     ));
   } catch (err) { next(err); }
 };
 
-exports.uploadAttachments = async (req, res, next) => {
+exports.addNote = async (req, res, next) => {
   try {
-    if (!req.files?.length) throw Object.assign(new Error("File tidak ditemukan"), { statusCode: 400 });
-    const attachments = req.files.map((file) => ({
+    const attachments = (req.files || []).map((file) => ({
       name: file.originalname,
       size: file.size,
       type: file.mimetype,
-      url: `/uploads/Tugas/${file.filename}`,
+      url: "/uploads" + file.path.split("uploads")[1],
+      uploadedBy: req.userId,
     }));
-    res.json(await taskService.uploadAttachments(req.params.id, attachments));
+    const note = {
+      text: req.body.text || "",
+      authorId: req.body.authorId || req.userId,
+      attachments,
+    };
+    res.json(await taskService.addNote(req.params.id, note));
   } catch (err) { next(err); }
 };
 
-exports.addNote = async (req, res, next) => {
-  try { res.json(await taskService.addNote(req.params.id, req.body)); } catch (err) { next(err); }
+exports.editNote = async (req, res, next) => {
+  try {
+    res.json(await taskService.editNote(req.params.id, req.params.noteId, req.body, req.userId));
+  } catch (err) { next(err); }
+};
+
+exports.deleteNote = async (req, res, next) => {
+  try {
+    res.json(await taskService.deleteNote(req.params.id, req.params.noteId, req.userId));
+  } catch (err) { next(err); }
 };
 
 exports.remove = async (req, res, next) => {

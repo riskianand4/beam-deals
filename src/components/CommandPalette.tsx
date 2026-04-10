@@ -63,7 +63,7 @@ const CommandPalette = () => {
         </CommandGroup>
         {matchedTasks.length > 0 && (
           <CommandGroup heading="Tugas">
-            {matchedTasks.map((t) => (<CommandItem key={t.id} onSelect={() => go("/tasks")} className="gap-3 cursor-pointer"><CheckSquare className="w-4 h-4 text-muted-foreground" /><div className="flex flex-col"><span className="text-sm">{t.title}</span><span className="text-[10px] text-muted-foreground capitalize">{t.status === "todo" ? "Akan Dikerjakan" : t.status === "in-progress" ? "Sedang Dikerjakan" : t.status === "needs-review" ? "Perlu Ditinjau" : "Selesai"}</span></div></CommandItem>))}
+            {matchedTasks.map((t) => (<CommandItem key={t.id} onSelect={() => go("/tasks")} className="gap-3 cursor-pointer"><CheckSquare className="w-4 h-4 text-muted-foreground" /><div className="flex flex-col"><span className="text-sm">{t.title}</span><span className="text-[10px] text-muted-foreground capitalize">{t.status === "todo" ? "Tugas" : "Selesai"}</span></div></CommandItem>))}
           </CommandGroup>
         )}
         {matchedUsers.length > 0 && (

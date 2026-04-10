@@ -1,17 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTasks } from "@/contexts/TaskContext";
-import { useMessages } from "@/contexts/MessageContext";
 import api from "@/lib/api";
 import type { Notification } from "@/types";
 import { Bell, AlertTriangle, CheckCircle2, Info, MessageCircleCodeIcon, Clock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { formatDistanceToNow, isPast, addDays } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { id as localeID } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 
-const ICON_MAP = {
+const ICON_MAP: Record<string, any> = {
   warning: AlertTriangle,
   success: CheckCircle2,
   info: Info,
@@ -19,7 +18,7 @@ const ICON_MAP = {
   deadline: Clock,
 };
 
-const COLOR_MAP = {
+const COLOR_MAP: Record<string, string> = {
   warning: "text-warning",
   success: "text-success",
   info: "text-primary",
@@ -27,84 +26,70 @@ const COLOR_MAP = {
   deadline: "text-destructive",
 };
 
-interface SmartNotif {
-  id: string;
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  type: keyof typeof ICON_MAP;
-}
+const CATEGORY_ROUTE_MAP: Record<string, string> = {
+  task: "/tasks",
+  payslip: "/payslip",
+  announcement: "/notes",
+  message: "/messages",
+  finance: "/finance",
+  explorer: "/explorer",
+  partner: "/partner",
+  approval: "/approval",
+  attendance: "/attendance",
+  team: "/team",
+  work_report: "/",
+};
 
 const NotificationDropdown = () => {
-  const { user, isAdmin, users } = useAuth();
-  const { tasks } = useTasks();
-  const { messages } = useMessages();
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [serverNotifs, setServerNotifs] = useState<Notification[]>([]);
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchNotifs = () => {
     if (api.getToken()) {
       api.getNotifications().then(setServerNotifs).catch(() => {});
     }
-  }, []);
+  };
 
-  const smartNotifs = useMemo<SmartNotif[]>(() => {
-    const notifs: SmartNotif[] = [];
-    const preferences = user?.notificationSettings ?? {
-      taskAssignments: true,
-      deadlineReminders: true,
-      teamUpdates: false,
-    };
+  useEffect(() => { fetchNotifs(); }, []);
 
-    serverNotifs.forEach((n) => {
-      notifs.push({ ...n, type: n.type as keyof typeof ICON_MAP });
-    });
+  useEffect(() => {
+    if (open) fetchNotifs();
+  }, [open]);
 
-    if (!user) return notifs;
-
-    const myTasks = isAdmin ? tasks : tasks.filter((t) => t.assigneeId === user.id);
-    if (preferences.deadlineReminders) {
-      myTasks.forEach((t) => {
-        if (isPast(new Date(t.deadline)) && t.status !== "completed") {
-          notifs.push({ id: `overdue-${t.id}`, title: "Tugas terlambat", message: `"${t.title}" sudah melewati tenggat`, timestamp: t.deadline, read: false, type: "deadline" });
-        }
-      });
-
-      const tomorrow = addDays(new Date(), 1);
-      myTasks.forEach((t) => {
-        const d = new Date(t.deadline);
-        if (d.toDateString() === tomorrow.toDateString() && t.status !== "completed") {
-          notifs.push({ id: `due-tomorrow-${t.id}`, title: "Tenggat besok", message: `"${t.title}" jatuh tempo besok`, timestamp: new Date().toISOString(), read: false, type: "warning" });
-        }
-      });
-    }
-
-    const unreadMsgs = messages.filter(
-      (m) => (m.toUserId === user.id || m.toUserId === "all") && m.fromUserId !== user.id
-    ).slice(0, 3);
-    unreadMsgs.forEach((m) => {
-      const from = users.find((u) => u.id === m.fromUserId);
-      notifs.push({ id: `msg-notif-${m.id}`, title: m.type === "announcement" ? "Pengumuman baru" : "Pesan baru", message: `${from?.name || "?"}: ${m.content.slice(0, 60)}...`, timestamp: m.createdAt, read: m.status === "read", type: "message" });
-    });
-
-    const seen = new Set<string>();
-    return notifs
-      .filter((n) => { if (seen.has(n.id) || dismissed.has(n.id)) return false; seen.add(n.id); return true; })
+  const displayNotifs = useMemo(() => {
+    return serverNotifs
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 10);
-  }, [user, isAdmin, tasks, messages, dismissed, serverNotifs, users]);
+  }, [serverNotifs]);
 
-  const unreadCount = smartNotifs.filter((n) => !n.read).length;
+  const unreadCount = displayNotifs.filter((n) => !n.read).length;
 
-  const markAllRead = () => {
-    const ids = smartNotifs.map((n) => n.id);
-    setDismissed(new Set([...dismissed, ...ids]));
+  const markAllRead = async () => {
+    setServerNotifs(prev => prev.map(n => ({ ...n, read: true })));
     api.markAllNotificationsRead().catch(() => {});
   };
 
+  const handleNotifClick = (n: Notification) => {
+    // Mark as read
+    if (!n.read) {
+      api.markNotificationRead(n.id).catch(() => {});
+      setServerNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+    }
+    setOpen(false);
+
+    // Navigate based on category
+    const route = n.category ? CATEGORY_ROUTE_MAP[n.category] : null;
+    if (route) {
+      navigate(route);
+    } else {
+      navigate("/notifications");
+    }
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="relative text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted" aria-label="Buka notifikasi">
           <Bell className="w-4.5 h-4.5" />
@@ -121,16 +106,20 @@ const NotificationDropdown = () => {
           {unreadCount > 0 && (<Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>Tandai semua dibaca</Button>)}
         </div>
         <div className="max-h-80 overflow-y-auto">
-          {smartNotifs.length === 0 ? (
+          {displayNotifs.length === 0 ? (
             <div className="text-center py-8 space-y-2">
               <Bell className="w-8 h-8 text-muted-foreground/30 mx-auto" />
               <p className="text-sm text-muted-foreground">Tidak ada notifikasi</p>
             </div>
-          ) : smartNotifs.map((n) => {
+          ) : displayNotifs.map((n) => {
             const Icon = ICON_MAP[n.type] || Info;
             const color = COLOR_MAP[n.type] || "text-primary";
             return (
-              <div key={n.id} className={`px-4 py-3 border-b border-border last:border-0 hover:bg-muted/50 transition-colors ${!n.read ? "bg-accent/30" : ""}`}>
+              <div
+                key={n.id}
+                className={`px-4 py-3 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!n.read ? "bg-accent/30" : ""}`}
+                onClick={() => handleNotifClick(n)}
+              >
                 <div className="flex gap-3">
                   <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${color}`} />
                   <div className="min-w-0">
@@ -142,6 +131,11 @@ const NotificationDropdown = () => {
               </div>
             );
           })}
+        </div>
+        <div className="border-t border-border px-4 py-2">
+          <Button variant="ghost" size="sm" className="w-full text-xs h-7" onClick={() => { setOpen(false); navigate("/notifications"); }}>
+            Lihat semua notifikasi
+          </Button>
         </div>
       </PopoverContent>
     </Popover>

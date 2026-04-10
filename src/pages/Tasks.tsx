@@ -1,53 +1,51 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CardGridSkeleton, StatsSkeleton } from "@/components/PageSkeleton";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTasks } from "@/contexts/TaskContext";
 import { useMenuSettings } from "@/contexts/MenuSettingsContext";
-import type { Task, TaskStatus, TeamGroup, User } from "@/types";
+import type { Task, TaskStatus, TeamGroup } from "@/types";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import CreateTaskDialog from "@/components/CreateTaskDialog";
 import TaskFilters from "@/components/TaskFilters";
 import TaskListView from "@/components/TaskListView";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion } from "framer-motion";
 import {
-  AlertTriangle,
   Calendar,
   CheckCircle2,
   CheckSquare,
   Clock,
-  Eye,
   Flag,
   GripVertical,
   Inbox,
+  LayoutGrid,
+  List,
   MessageCircleCodeIcon,
   Paperclip,
   Search,
-  TrendingUp,
+  User,
+  UserCheck,
   Users,
+  MoreVertical,
+  Eye,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDistanceToNow, isPast, isToday } from "date-fns";
 import { id as localeID } from "date-fns/locale";
 import StatsCard from "@/components/StatsCard";
 import EmployeeGrid, { EmployeeHeader } from "@/components/EmployeeGrid";
 import { useAdminBadges } from "@/hooks/useAdminBadges";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getUploadUrl } from "@/lib/api";
 import api from "@/lib/api";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 const COLUMNS: {
   status: TaskStatus;
@@ -55,26 +53,21 @@ const COLUMNS: {
   accent: string;
   emptyText: string;
 }[] = [
-  { status: "todo", label: "Akan Dikerjakan", accent: "bg-muted-foreground", emptyText: "Tidak ada yang menunggu" },
-  { status: "in-progress", label: "Sedang Dikerjakan", accent: "bg-primary", emptyText: "Mulai bekerja!" },
-  { status: "needs-review", label: "Perlu Ditinjau", accent: "bg-warning", emptyText: "Semua sudah ditinjau" },
-  { status: "completed", label: "Selesai", accent: "bg-success", emptyText: "Selesaikan tugas!" },
+  { status: "todo", label: "Tugas", accent: "bg-muted-foreground", emptyText: "Tidak ada tugas" },
+  { status: "completed", label: "Selesai", accent: "bg-success", emptyText: "Belum ada yang selesai" },
 ];
 
 const PRIORITY_STYLES: Record<string, string> = {
   high: "bg-destructive/10 text-destructive",
   medium: "bg-warning/10 text-warning",
   low: "bg-muted text-muted-foreground",
+  none: "",
 };
 const PRIORITY_LABELS: Record<string, string> = {
   high: "Tinggi",
   medium: "Sedang",
   low: "Rendah",
-};
-
-const isUserReviewer = (task: Task, userId?: string) => {
-  if (!userId) return false;
-  return task.reviewers?.some(r => r.userId === userId) || false;
+  none: "",
 };
 
 const Tasks = () => {
@@ -92,26 +85,19 @@ const Tasks = () => {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [pendingDrop, setPendingDrop] = useState<{ taskId: string; status: TaskStatus } | null>(null);
-  const [taskTab, setTaskTab] = useState<"personal" | "team" | "review">(
-    searchParams.get("tab") === "personal" ? "personal" : searchParams.get("tab") === "review" ? "review" : "team",
+  const [taskTab, setTaskTab] = useState<"personal" | "team">(
+    searchParams.get("tab") === "personal" ? "personal" : "team",
   );
   const [teams, setTeams] = useState<TeamGroup[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(searchParams.get("teamId") || null);
   const [adminTab, setAdminTab] = useState<"employee" | "team">(searchParams.get("tab") === "employee" ? "employee" : "team");
-
-  // Combined reviewer + documentation dialog for "needs-review"
-  const [reviewRequestDialog, setReviewRequestDialog] = useState<{ taskId: string } | null>(null);
-  const [dragReviewers, setDragReviewers] = useState<User[]>([]);
-  const [selectedReviewerIds, setSelectedReviewerIds] = useState<string[]>([]);
-  const [dragReviewerSearch, setDragReviewerSearch] = useState("");
-  const [reviewDocFiles, setReviewDocFiles] = useState<File[]>([]);
-  const [submittingReview, setSubmittingReview] = useState(false);
-  const reviewDocFileRef = useRef<HTMLInputElement>(null);
+  const [adminViewMode, setAdminViewMode] = useState<"grid" | "table">("table");
+  const [adminSearch, setAdminSearch] = useState("");
 
   const [employeeTasks, setEmployeeTasks] = useState<Task[]>([]);
   const [employeeTasksLoading, setEmployeeTasksLoading] = useState(false);
 
-  const hasReviewAccess = hasAccess("review");
+  const hasTasksAccess = hasAccess("tasks");
 
   useEffect(() => {
     api.getTeams().then(setTeams).catch(() => {});
@@ -127,11 +113,7 @@ const Tasks = () => {
     }
   }, [isAdmin, employeeId]);
 
-  useEffect(() => {
-    if (reviewRequestDialog) {
-      api.getReviewers().then(setDragReviewers).catch(() => setDragReviewers([]));
-    }
-  }, [reviewRequestDialog]);
+  const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 
   const isLeader = useMemo(() => {
     if (!user) return false;
@@ -153,31 +135,22 @@ const Tasks = () => {
     return tasks.filter((task) => task.type === "team" && task.teamId === selectedTeamId);
   }, [tasks, selectedTeamId]);
 
-  // Review tasks for the current user (only needs-review where user is a reviewer)
-  const reviewTasks = useMemo(() => {
-    if (!user) return [];
-    return allMyTasks.filter((t) => t.status === "needs-review" && isUserReviewer(t, user.id));
-  }, [allMyTasks, user]);
-
   const filteredByTab = useMemo(() => {
-    if (isAdmin) return allMyTasks;
-    if (taskTab === "review") return reviewTasks;
+    if (isAdmin || hasTasksAccess) return allMyTasks;
     return allMyTasks.filter((t) => {
-      // Exclude tasks where user is a reviewer and status is needs-review (those go to review tab only)
-      if (t.status === "needs-review" && isUserReviewer(t, user?.id)) return false;
       if (taskTab === "personal") return t.type === "personal" || !t.type;
       return t.type === "team";
     });
-  }, [allMyTasks, taskTab, isAdmin, reviewTasks, user]);
+  }, [allMyTasks, taskTab, isAdmin, hasTasksAccess]);
 
   const myTasks = useMemo(() => {
-    const sourceTasks = isAdmin && selectedTeamId ? teamTasksForSelectedTeam : filteredByTab;
+    const sourceTasks = (isAdmin || hasTasksAccess) && selectedTeamId ? teamTasksForSelectedTeam : filteredByTab;
     return sourceTasks.filter((t) => {
       const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase());
       const matchPriority = priorityFilter === "all" || t.priority === priorityFilter;
       return matchSearch && matchPriority;
     });
-  }, [filteredByTab, isAdmin, selectedTeamId, teamTasksForSelectedTeam, search, priorityFilter]);
+  }, [filteredByTab, isAdmin, hasTasksAccess, selectedTeamId, teamTasksForSelectedTeam, search, priorityFilter]);
 
   useEffect(() => {
     if (selectedTask) {
@@ -188,90 +161,314 @@ const Tasks = () => {
     }
   }, [tasks, employeeTasks]);
 
-  if (isAdmin && !employeeId && !selectedTeamId) {
+  // Admin stats
+  const adminTotalTasks = tasks.length;
+  const adminEmployeeCount = users.filter(u => u.role === "employee").length;
+  const adminTeamCount = teams.length;
+  const adminTodoCount = tasks.filter(t => t.status === "todo").length;
+  const adminDoneCount = tasks.filter(t => t.status === "completed").length;
+
+  // Employee task summary for admin employee tab
+  const employeeTaskSummary = useMemo(() => {
+    const employees = users.filter(u => u.role === "employee");
+    return employees.map(emp => {
+      const empTasks = tasks.filter(t => t.assigneeId === emp.id);
+      const total = empTasks.length;
+      const done = empTasks.filter(t => t.status === "completed").length;
+      const todo = empTasks.filter(t => t.status === "todo").length;
+      const highPriority = empTasks.filter(t => t.priority === "high" && t.status !== "completed").length;
+      return { ...emp, total, done, todo, highPriority };
+    }).filter(emp => {
+      if (!adminSearch) return true;
+      return emp.name.toLowerCase().includes(adminSearch.toLowerCase());
+    });
+  }, [users, tasks, adminSearch]);
+
+  // Admin or hasTasksAccess: show admin-like view with team/employee tabs
+  if ((isAdmin || hasTasksAccess) && !employeeId && !selectedTeamId) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-4 max-w-7xl mx-auto pb-10">
         <div className="flex items-center justify-between">
           <h1 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <CheckSquare className="w-4 h-4 text-primary" /> Tugas
+            <CheckSquare className="w-4 h-4" /> Manajemen Tugas
           </h1>
-          <CreateTaskDialog teams={teams} isLeader={isLeader} />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border border-border rounded-lg p-0.5 bg-muted/30 shadow-sm">
+              <Tooltip><TooltipTrigger asChild><button className={`p-1.5 rounded-md transition-colors ${adminViewMode === "grid" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`} onClick={() => setAdminViewMode("grid")}><LayoutGrid className="w-3.5 h-3.5" /></button></TooltipTrigger><TooltipContent>Tampilan Grid</TooltipContent></Tooltip>
+              <Tooltip><TooltipTrigger asChild><button className={`p-1.5 rounded-md transition-colors ${adminViewMode === "table" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`} onClick={() => setAdminViewMode("table")}><List className="w-3.5 h-3.5" /></button></TooltipTrigger><TooltipContent>Tampilan Tabel</TooltipContent></Tooltip>
+            </div>
+            <CreateTaskDialog teams={teams} isLeader={isLeader} />
+          </div>
         </div>
-        <Tabs value={adminTab} onValueChange={(v) => setAdminTab(v as "employee" | "team")} className="w-full">
-          <TabsList className="relative h-8">
-            <TabsTrigger value="team" className="relative text-xs px-4 h-7 data-[state=active]:bg-transparent data-[state=active]:shadow-none">
-              {adminTab === "team" && <motion.div layoutId="admin-tab-indicator" className="absolute inset-0 rounded-sm bg-background shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-              <span className="relative z-10">Team</span>
-            </TabsTrigger>
-            <TabsTrigger value="employee" className="relative text-xs px-4 h-7 data-[state=active]:bg-transparent data-[state=active]:shadow-none">
-              {adminTab === "employee" && <motion.div layoutId="admin-tab-indicator" className="absolute inset-0 rounded-sm bg-background shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-              <span className="relative z-10">Karyawan</span>
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="employee" className="mt-3">
-            <EmployeeGrid basePath="/tasks" badgeCounts={Object.fromEntries(Object.entries(adminBadges.perEmployee).map(([k, v]) => [k, v.tasks]))} />
-          </TabsContent>
-          <TabsContent value="team" className="mt-3">
-            {teams.length === 0 ? (
-              <EmptyState icon={Users} title="Belum ada tim" description="Buat tim terlebih dahulu di halaman Tim" />
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {teams.map((team, i) => {
-                  const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
-                  const doneTasks = teamTasks.filter((t) => t.status === "completed").length;
-                  const leader = users.find((u) => u.id === team.leaderId);
-                  return (
-                    <motion.div key={team.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => setSelectedTeamId(team.id)} className="ms-card-hover p-4 cursor-pointer">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center"><Users className="w-5 h-5" /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{team.name}</p>
-                          <p className="text-[10px] text-muted-foreground">Ketua: {leader?.name || "-"}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 mt-3">
-                        <Badge variant="secondary" className="text-[10px]">{teamTasks.length} tugas</Badge>
-                        <Badge variant="outline" className="text-[10px]">{doneTasks} selesai</Badge>
-                        <Badge variant="outline" className="text-[10px]">{team.memberIds?.length || 0} anggota</Badge>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <StatsCard label="Total Tugas" value={adminTotalTasks} icon={CheckSquare} color="" bgColor="bg-muted/30" delay={0} />
+          <StatsCard label="Menunggu" value={adminTodoCount} icon={Clock} color="text-warning" bgColor="bg-warning/10" delay={1} />
+          <StatsCard label="Selesai" value={adminDoneCount} icon={CheckCircle2} color="text-success" bgColor="bg-success/10" delay={2} />
+          <StatsCard label="Karyawan" value={adminEmployeeCount} icon={UserCheck} color="" bgColor="bg-muted/30" delay={3} />
+          <StatsCard label="Tim" value={adminTeamCount} icon={Users} color="" bgColor="bg-muted/30" delay={4} />
+        </div>
+
+        <TooltipProvider>
+          <Tabs value={adminTab} onValueChange={(v) => setAdminTab(v as "employee" | "team")} className="w-full mt-2">
+            <TabsList className="bg-transparent  justify-start rounded-none p-0 h-auto space-x-6 mb-4">
+              <TabsTrigger value="team" className="px-0 py-2 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-foreground data-[state=active]:shadow-none rounded-none text-xs">
+                <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Tim</span>
+              </TabsTrigger>
+              <TabsTrigger value="employee" className="px-0 py-2 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-foreground data-[state=active]:shadow-none rounded-none text-xs">
+                <span className="flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5" /> Karyawan</span>
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* Karyawan Tab */}
+            <TabsContent value="employee" className="mt-0 space-y-4">
+              <div className="bg-card border border-border rounded-xl p-2.5 flex items-center gap-2 shadow-sm">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input placeholder="Cari karyawan..." value={adminSearch} onChange={e => setAdminSearch(e.target.value)} className="pl-8 h-8 text-[10px] bg-muted/30 border-none shadow-none focus-visible:ring-0" />
+                </div>
               </div>
-            )}
-          </TabsContent>
-        </Tabs>
+              
+              <div className="flex items-center gap-2 px-1">
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Daftar Tugas Karyawan</p>
+                <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{employeeTaskSummary.length} Karyawan</Badge>
+              </div>
+
+              <div className="bg-card border border-border shadow-sm rounded-xl overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-[10px] h-8 w-[40%]">Karyawan</TableHead>
+                      <TableHead className="text-[10px] h-8 text-center">Total Tugas</TableHead>
+                      <TableHead className="text-[10px] h-8 text-center">Menunggu</TableHead>
+                      <TableHead className="text-[10px] h-8 text-center">Selesai</TableHead>
+                      <TableHead className="text-[10px] h-8 text-center">Prioritas Tinggi</TableHead>
+                      <TableHead className="text-[10px] h-8 text-right w-[80px]">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {employeeTaskSummary.length === 0 ? (
+                       <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                             <UserCheck className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                             <p className="text-xs text-muted-foreground">Tidak ada data karyawan.</p>
+                          </TableCell>
+                       </TableRow>
+                    ) : employeeTaskSummary.map(emp => (
+                      <TableRow key={emp.id} className="cursor-pointer hover:bg-muted/40 transition-colors group h-10" onClick={() => navigate(`/tasks/${emp.id}`)}>
+                        <TableCell className="py-1.5">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar className="w-7 h-7 border shadow-sm rounded-md">
+                              {emp.avatar && <AvatarImage src={getUploadUrl(emp.avatar)} />}
+                              <AvatarFallback className="bg-muted text-foreground text-[8px] font-bold rounded-md">{getInitials(emp.name)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-xs text-foreground line-clamp-1">{emp.name}</span>
+                              <span className="text-[9px] text-muted-foreground truncate">{emp.position || "Karyawan"}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-center py-1.5 font-medium">{emp.total}</TableCell>
+                        <TableCell className="text-xs text-center py-1.5 text-warning font-medium">{emp.todo}</TableCell>
+                        <TableCell className="text-xs text-center py-1.5 text-success font-medium">{emp.done}</TableCell>
+                        <TableCell className="text-center py-1.5">
+                          {emp.highPriority > 0 ? <Badge variant="destructive" className="text-[9px] h-4 px-1.5">{emp.highPriority}</Badge> : <span className="text-[10px] text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell className="text-right py-1.5">
+                           <div onClick={e => e.stopPropagation()}>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button size="icon" variant="ghost" className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                                    <MoreVertical className="w-3.5 h-3.5" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-36 p-1" align="end">
+                                  <button
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] text-foreground hover:bg-muted rounded-md transition-colors"
+                                    onClick={() => navigate(`/tasks/${emp.id}`)}
+                                  >
+                                    <Eye className="w-3 h-3" /> Lihat Tugas
+                                  </button>
+                                </PopoverContent>
+                              </Popover>
+                           </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            {/* Tim Tab */}
+            <TabsContent value="team" className="mt-0 space-y-4">
+              <div className="bg-card  rounded-lg p-1 flex items-center gap-2 shadow-sm">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input placeholder="Cari tim..." value={adminSearch} onChange={e => setAdminSearch(e.target.value)} className="pl-8 h-8 text-[10px] bg-muted/30 border-none shadow-none focus-visible:ring-0" />
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2 px-1">
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Daftar Tugas Tim</p>
+                <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{teams.length} Tim</Badge>
+              </div>
+
+              {teams.length === 0 ? (
+                <EmptyState icon={Users} title="Belum ada team" description="Buat team terlebih dahulu di halaman Team" compact />
+              ) : adminViewMode === "table" ? (
+                <div className="bg-card border border-border shadow-sm rounded-xl overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="text-[10px] h-8 w-[35%]">Tim</TableHead>
+                        <TableHead className="text-[10px] h-8">Ketua Tim</TableHead>
+                        <TableHead className="text-[10px] h-8 text-center">Total Tugas</TableHead>
+                        <TableHead className="text-[10px] h-8 text-center">Selesai</TableHead>
+                        <TableHead className="text-[10px] h-8 text-center">Anggota</TableHead>
+                        <TableHead className="text-[10px] h-8 text-right w-[80px]">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {teams.filter(t => !adminSearch || t.name.toLowerCase().includes(adminSearch.toLowerCase())).map((team) => {
+                        const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
+                        const doneTasks = teamTasks.filter((t) => t.status === "completed").length;
+                        const leader = users.find((u) => u.id === team.leaderId);
+                        
+                        return (
+                          <TableRow key={team.id} className="cursor-pointer hover:bg-muted/40 transition-colors group h-10" onClick={() => setSelectedTeamId(team.id)}>
+                            <TableCell className="py-1.5">
+                               <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center shrink-0">
+                                     <Users className="w-3.5 h-3.5 text-foreground" />
+                                  </div>
+                                  <span className="text-xs font-semibold text-foreground">{team.name}</span>
+                               </div>
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                               {leader ? (
+                                  <div className="flex items-center gap-1.5">
+                                     <Avatar className="w-5 h-5 rounded-md">
+                                        {leader.avatar && <AvatarImage src={getUploadUrl(leader.avatar)} />}
+                                        <AvatarFallback className="bg-muted text-foreground text-[7px] font-bold rounded-md">{getInitials(leader.name)}</AvatarFallback>
+                                     </Avatar>
+                                     <span className="text-[10px] text-muted-foreground">{leader.name}</span>
+                                  </div>
+                               ) : <span className="text-[10px] text-muted-foreground italic">- Belum ada -</span>}
+                            </TableCell>
+                            <TableCell className="text-xs text-center py-1.5 font-medium">{teamTasks.length}</TableCell>
+                            <TableCell className="text-xs text-center py-1.5 text-success font-medium">{doneTasks}</TableCell>
+                            <TableCell className="text-xs text-center py-1.5">{team.memberIds?.length || 0}</TableCell>
+                            <TableCell className="text-right py-1.5">
+                               <div onClick={e => e.stopPropagation()}>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button size="icon" variant="ghost" className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                                        <MoreVertical className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-36 p-1" align="end">
+                                      <button
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] text-foreground hover:bg-muted rounded-md transition-colors"
+                                        onClick={() => setSelectedTeamId(team.id)}
+                                      >
+                                        <Eye className="w-3 h-3" /> Lihat Tugas
+                                      </button>
+                                    </PopoverContent>
+                                  </Popover>
+                               </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {teams.filter(t => !adminSearch || t.name.toLowerCase().includes(adminSearch.toLowerCase())).map((team, i) => {
+                    const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
+                    const doneTasks = teamTasks.filter((t) => t.status === "completed").length;
+                    const leader = users.find((u) => u.id === team.leaderId);
+                    
+                    return (
+                      <motion.div key={team.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => setSelectedTeamId(team.id)} 
+                        className="bg-card border border-border shadow-sm rounded-xl p-4 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all group flex flex-col">
+                        
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                              <Users className="w-4 h-4 text-foreground" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-foreground line-clamp-1">{team.name}</span>
+                              <span className="text-[9px] text-muted-foreground line-clamp-1">Ketua: {leader?.name || "-"}</span>
+                            </div>
+                          </div>
+                          
+                          <div onClick={e => e.stopPropagation()}>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button size="icon" variant="ghost" className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground -mt-1 -mr-2">
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-32 p-1" align="end">
+                                <button
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] text-foreground hover:bg-muted rounded-md transition-colors"
+                                  onClick={() => setSelectedTeamId(team.id)}
+                                >
+                                  <Eye className="w-3 h-3" /> Lihat
+                                </button>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-auto pt-3 border-t border-border/50 flex-wrap">
+                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-muted/50 font-medium">{teamTasks.length} Tugas</Badge>
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-medium border-border">{doneTasks} Selesai</Badge>
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-medium border-border">{team.memberIds?.length || 0} Anggota</Badge>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </TooltipProvider>
       </div>
     );
   }
 
-  if (isAdmin && selectedTeamId) {
+  // ===== TEAM TASKS DETAIL VIEW (Inside Admin/Employee) =====
+  if ((isAdmin || hasTasksAccess) && selectedTeamId) {
     const team = teams.find((t) => t.id === selectedTeamId);
     const teamTasksList = myTasks;
-    const pendingCount = teamTasksList.filter((t) => t.status === "todo").length;
-    const inProgCount = teamTasksList.filter((t) => t.status === "in-progress").length;
-    const reviewCount2 = teamTasksList.filter((t) => t.status === "needs-review").length;
+    const todoCount = teamTasksList.filter((t) => t.status === "todo").length;
     const doneCount = teamTasksList.filter((t) => t.status === "completed").length;
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setSelectedTeamId(null)} className="text-xs  hover:underline">← Kembali</button>
-          <h1 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <Users className="w-4 h-4 " /> Tugas Tim: {team?.name}
+      <div className="space-y-4 max-w-7xl mx-auto pb-10">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="w-7 h-7 bg-muted/50" onClick={() => setSelectedTeamId(null)}>
+             <List className="w-3 h-3" />
+          </Button>
+          <h1 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Users className="w-4 h-4" /> Tugas Team: {team?.name}
           </h1>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <StatsCard label="Akan Dikerjakan" value={pendingCount} icon={Clock} color="text-amber-600" bgColor="bg-amber-600/20" delay={0} />
-          <StatsCard label="Sedang Dikerjakan" value={inProgCount} icon={TrendingUp} color="" bgColor="bg-primary" delay={1} />
-          <StatsCard label="Ditinjau" value={reviewCount2} icon={AlertTriangle} color="text-orange-600" bgColor="bg-orange-600/20" delay={2} />
-          <StatsCard label="Selesai" value={doneCount} icon={CheckCircle2} color="text-success" bgColor="bg-success/10" delay={3} />
+        <div className="grid grid-cols-2 gap-3">
+          <StatsCard label="Tugas" value={todoCount} icon={Clock} color="text-warning" bgColor="bg-warning/10" delay={0} />
+          <StatsCard label="Selesai" value={doneCount} icon={CheckCircle2} color="text-success" bgColor="bg-success/10" delay={1} />
         </div>
         <TaskFilters search={search} onSearchChange={setSearch} priorityFilter={priorityFilter} onPriorityFilterChange={setPriorityFilter} view={view} onViewChange={setView} />
         {teamTasksList.length === 0 ? (
-          <EmptyState icon={Inbox} title="Belum ada tugas tim" description="Tugas tim yang dibuat untuk grup ini akan tampil di sini." />
+          <EmptyState icon={Inbox} title="Belum ada tugas team" description="Tugas team yang dibuat untuk grup ini akan tampil di sini." compact />
         ) : view === "list" ? (
-          <TaskListView tasks={teamTasksList} onTaskClick={setSelectedTask} isAdmin={isAdmin} />
+          <TaskListView tasks={teamTasksList} onTaskClick={setSelectedTask} isAdmin={isAdmin || hasTasksAccess} />
         ) : (
           <KanbanBoard tasks={teamTasksList} columns={COLUMNS} users={users} canDragTask={() => false} onDragStart={() => {}} onDrop={(e) => { e.preventDefault(); setDragOverColumn(null); }} dragOverColumn={dragOverColumn} setDragOverColumn={setDragOverColumn} onTaskClick={setSelectedTask} />
         )}
@@ -280,22 +477,11 @@ const Tasks = () => {
     );
   }
 
+  // ===== EMPLOYEE STANDARD VIEW =====
   const canDragTask = (task: Task) => {
     if (task.status === "completed") return false;
-    if (isAdmin) return false;
-
-    if (task.type === "team") {
-      if (task.status === "needs-review") {
-        return isUserReviewer(task, user?.id);
-      }
-      return isLeader && leaderTeams.some((t) => t.id === task.teamId);
-    }
-
-    // Personal tasks
-    if (task.status === "needs-review") {
-      return isUserReviewer(task, user?.id);
-    }
-    return true;
+    if (isLeader && task.type === "team" && leaderTeams.some((t) => t.id === task.teamId)) return true;
+    return false;
   };
 
   const handleDragStart = (e: React.DragEvent, taskId: string, task: Task) => {
@@ -307,30 +493,11 @@ const Tasks = () => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("taskId");
     if (!taskId) return;
-
     const draggedTask = myTasks.find((t) => t.id === taskId);
     if (draggedTask?.status === "completed") {
-      toast.error("Tugas yang sudah selesai tidak dapat diubah statusnya");
       setDragOverColumn(null);
       return;
     }
-
-    if (status === "needs-review") {
-      // Open combined reviewer + docs dialog
-      setReviewRequestDialog({ taskId });
-      setSelectedReviewerIds([]);
-      setDragReviewerSearch("");
-      setReviewDocFiles([]);
-      setDragOverColumn(null);
-      return;
-    }
-
-    if (status === "completed") {
-      toast.error("Gunakan tombol Setujui di detail tugas untuk menyelesaikan tugas");
-      setDragOverColumn(null);
-      return;
-    }
-
     setPendingDrop({ taskId, status });
     setDragOverColumn(null);
   };
@@ -342,114 +509,54 @@ const Tasks = () => {
     }
   };
 
-  const handleReviewDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    setReviewDocFiles((prev) => [...prev, ...Array.from(files)]);
-    if (reviewDocFileRef.current) reviewDocFileRef.current.value = "";
-  };
-
-  const toggleReviewerId = (id: string) => {
-    setSelectedReviewerIds(prev =>
-      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
-    );
-  };
-
-  const confirmReviewRequest = async () => {
-    if (!reviewRequestDialog || selectedReviewerIds.length === 0) return;
-    try {
-      setSubmittingReview(true);
-      // Upload documentation files first if any
-      if (reviewDocFiles.length > 0) {
-        const formData = new FormData();
-        reviewDocFiles.forEach((file) => formData.append("files", file));
-        await api.uploadTaskAttachments(reviewRequestDialog.taskId, formData);
-      }
-      await updateTaskStatus(reviewRequestDialog.taskId, "needs-review", selectedReviewerIds);
-      await refreshTasks();
-      setReviewRequestDialog(null);
-      setSelectedReviewerIds([]);
-      setReviewDocFiles([]);
-      toast.success("Tugas dikirim untuk ditinjau");
-    } catch (err: any) {
-      toast.error(err.message || "Gagal mengubah status");
-    } finally {
-      setSubmittingReview(false);
-    }
-  };
-
   const isLoading = isAdmin && employeeId ? employeeTasksLoading : tasksLoading;
-
-  const pending = filteredByTab.filter((t) => t.status === "todo").length;
-  const inProg = filteredByTab.filter((t) => t.status === "in-progress").length;
-  const review = filteredByTab.filter((t) => t.status === "needs-review").length;
-  const done = filteredByTab.filter((t) => t.status === "completed").length;
+  const todoCount = filteredByTab.filter((t) => t.status === "todo").length;
+  const doneCount = filteredByTab.filter((t) => t.status === "completed").length;
 
   const miniStats = [
-    { label: "Akan Dikerjakan", value: pending, icon: Clock, color: "text-amber-600", bgColor: "bg-amber-600/20" },
-    { label: "Sedang Dikerjakan", value: inProg, icon: TrendingUp, color: "", bgColor: "bg-primary" },
-    { label: "Ditinjau", value: review, icon: AlertTriangle, color: "text-orange-600", bgColor: "bg-orange-600/20" },
-    { label: "Selesai", value: done, icon: CheckCircle2, color: "text-success", bgColor: "bg-success/10" },
+    { label: "Tugas", value: todoCount, icon: Clock, color: "text-warning", bgColor: "bg-warning/10" },
+    { label: "Selesai", value: doneCount, icon: CheckCircle2, color: "text-success", bgColor: "bg-success/10" },
   ];
 
-  const personalCount = allMyTasks.filter((t) => {
-    if (t.status === "needs-review" && isUserReviewer(t, user?.id)) return false;
-    return t.type === "personal" || !t.type;
-  }).length;
-  const teamCount = allMyTasks.filter((t) => {
-    if (t.status === "needs-review" && isUserReviewer(t, user?.id)) return false;
-    return t.type === "team";
-  }).length;
-  const reviewCount = reviewTasks.length;
-
-  const filteredDragReviewers = dragReviewers.filter(r =>
-    r.name.toLowerCase().includes(dragReviewerSearch.toLowerCase())
-  );
+  const personalCount = allMyTasks.filter((t) => t.type === "personal" || !t.type).length;
+  const teamCount = allMyTasks.filter((t) => t.type === "team").length;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 max-w-7xl mx-auto pb-10">
       {isAdmin && employeeId && <EmployeeHeader employeeId={employeeId} backPath="/tasks" />}
 
-      {!isAdmin && (
+      {!isAdmin && !hasTasksAccess && (
         <div className="flex items-center justify-between">
           <h1 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <CheckSquare className="w-4 h-4 text-primary" /> Tugas
+            <CheckSquare className="w-4 h-4" /> Tugas
           </h1>
           {isLeader && <CreateTaskDialog teams={leaderTeams} isLeader={isLeader} />}
         </div>
       )}
 
-      {!isAdmin && (
-        <Tabs value={taskTab} onValueChange={(v) => setTaskTab(v as "personal" | "team" | "review")} className="w-full">
-          <TabsList className="relative h-8">
-            <TabsTrigger value="team" className="relative text-xs px-3 h-7 data-[state=active]:bg-transparent data-[state=active]:shadow-none">
-              {taskTab === "team" && <motion.div layoutId="task-tab-indicator" className="absolute inset-0 rounded-sm bg-background shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-              <span className="relative z-10 flex items-center">Tim {teamCount > 0 && <Badge variant="secondary" className="ml-1.5 text-[9px] h-4 px-1">{teamCount}</Badge>}</span>
-            </TabsTrigger>
-            <TabsTrigger value="personal" className="relative text-xs px-3 h-7 data-[state=active]:bg-transparent data-[state=active]:shadow-none">
-              {taskTab === "personal" && <motion.div layoutId="task-tab-indicator" className="absolute inset-0 rounded-sm bg-background shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-              <span className="relative z-10 flex items-center">Pribadi {personalCount > 0 && <Badge variant="secondary" className="ml-1.5 text-[9px] h-4 px-1">{personalCount}</Badge>}</span>
-            </TabsTrigger>
-            {hasReviewAccess && (
-              <TabsTrigger value="review" className="relative text-xs px-3 h-7 data-[state=active]:bg-transparent data-[state=active]:shadow-none">
-                {taskTab === "review" && <motion.div layoutId="task-tab-indicator" className="absolute inset-0 rounded-sm bg-background shadow-sm" transition={{ type: "spring", bounce: 0.2, duration: 0.5 }} />}
-                <span className="relative z-10 flex items-center">
-                  <Eye className="w-3 h-3 mr-1" />Tinjau {reviewCount > 0 && <Badge variant="secondary" className="ml-1.5 text-[9px] h-4 px-1">{reviewCount}</Badge>}
-                </span>
+      {!isAdmin && !hasTasksAccess && (
+        <TooltipProvider>
+          <Tabs value={taskTab} onValueChange={(v) => setTaskTab(v as "personal" | "team")} className="w-full">
+            <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none p-0 h-auto space-x-6 mb-2">
+              <TabsTrigger value="team" className="px-0 py-2 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-foreground data-[state=active]:shadow-none rounded-none text-xs gap-1.5">
+                <Users className="w-3.5 h-3.5" /> Tim {teamCount > 0 && <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-1">{teamCount}</Badge>}
               </TabsTrigger>
-            )}
-          </TabsList>
-        </Tabs>
+              <TabsTrigger value="personal" className="px-0 py-2 data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-foreground data-[state=active]:shadow-none rounded-none text-xs gap-1.5">
+                <User className="w-3.5 h-3.5" /> Pribadi {personalCount > 0 && <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-1">{personalCount}</Badge>}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </TooltipProvider>
       )}
 
       {isLoading ? (
         <>
-          <StatsSkeleton count={4} />
-          <CardGridSkeleton count={8} cols={4} />
+          <StatsSkeleton count={2} />
+          <CardGridSkeleton count={4} cols={2} />
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {miniStats.map((s, i) => <StatsCard key={s.label} {...s} delay={i} />)}
           </div>
 
@@ -457,12 +564,13 @@ const Tasks = () => {
 
           {myTasks.length === 0 && !search && priorityFilter === "all" ? (
             <EmptyState
-              icon={taskTab === "review" ? Eye : Inbox}
-              title={isAdmin && employeeId ? "Belum ada tugas untuk karyawan ini" : taskTab === "review" ? "Tidak ada tugas untuk ditinjau" : taskTab === "team" ? "Belum ada tugas tim" : "Belum ada tugas"}
-              description={taskTab === "review" ? "Tugas yang perlu Anda tinjau akan muncul di sini" : ""}
+              icon={Inbox}
+              title={isAdmin && employeeId ? "Belum ada tugas untuk karyawan ini" : taskTab === "team" ? "Belum ada tugas team" : "Belum ada tugas"}
+              description=""
+              compact
             />
           ) : view === "list" ? (
-            <TaskListView tasks={myTasks} onTaskClick={setSelectedTask} isAdmin={isAdmin} />
+            <TaskListView tasks={myTasks} onTaskClick={setSelectedTask} isAdmin={isAdmin || hasTasksAccess} />
           ) : (
             <KanbanBoard tasks={myTasks} columns={COLUMNS} users={users} canDragTask={canDragTask} onDragStart={handleDragStart} onDrop={handleDrop} dragOverColumn={dragOverColumn} setDragOverColumn={setDragOverColumn} onTaskClick={setSelectedTask} />
           )}
@@ -470,73 +578,6 @@ const Tasks = () => {
           <TaskDetailModal task={selectedTask} open={!!selectedTask} onOpenChange={(open) => { if (!open) setSelectedTask(null); }} teams={teams} />
 
           <ConfirmDialog open={!!pendingDrop} onOpenChange={(open) => { if (!open) setPendingDrop(null); }} title="Ubah status tugas?" description="Yakin ingin memindahkan tugas ini ke status baru?" onConfirm={confirmDrop} />
-
-          {/* Combined Reviewer + Documentation dialog */}
-          <Dialog open={!!reviewRequestDialog} onOpenChange={(open) => { if (!open) { setReviewRequestDialog(null); setSelectedReviewerIds([]); setReviewDocFiles([]); } }}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-sm">Kirim untuk Ditinjau</DialogTitle>
-                <DialogDescription className="text-xs">Pilih peninjau dan lampirkan dokumentasi.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                {/* Reviewer selection (multi) */}
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-foreground">Pilih Peninjau (bisa lebih dari 1)</label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input placeholder="Cari peninjau..." value={dragReviewerSearch} onChange={(e) => setDragReviewerSearch(e.target.value)} className="pl-8 h-9 text-xs" />
-                  </div>
-                  <ScrollArea className="max-h-[160px]">
-                    <div className="space-y-1">
-                      {filteredDragReviewers.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">
-                          {dragReviewers.length === 0 ? "Belum ada karyawan dengan hak akses tinjau" : "Tidak ditemukan"}
-                        </p>
-                      ) : filteredDragReviewers.map((r) => (
-                        <button key={r.id} onClick={() => toggleReviewerId(r.id)} className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors ${selectedReviewerIds.includes(r.id) ? "bg-primary/10 text-primary ring-1 ring-primary/30" : "hover:bg-muted"}`}>
-                          <Checkbox checked={selectedReviewerIds.includes(r.id)} className="pointer-events-none" />
-                          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-semibold text-primary">{r.name.charAt(0).toUpperCase()}</div>
-                          <div className="text-left">
-                            <p className="font-medium text-foreground">{r.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{r.position || r.department}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                  {selectedReviewerIds.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground">{selectedReviewerIds.length} peninjau dipilih</p>
-                  )}
-                </div>
-
-                {/* Documentation upload */}
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-foreground">Dokumentasi (opsional)</label>
-                  <input ref={reviewDocFileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" onChange={handleReviewDocFileChange} className="hidden" />
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs w-full border-dashed" onClick={() => reviewDocFileRef.current?.click()}>
-                    <Paperclip className="w-3.5 h-3.5" /> Lampirkan Dokumentasi
-                  </Button>
-                  {reviewDocFiles.length > 0 && (
-                    <div className="space-y-1">
-                      {reviewDocFiles.map((file, i) => (
-                        <div key={`${file.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted text-xs">
-                          <Paperclip className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="truncate flex-1 text-foreground">{file.name}</span>
-                          <button onClick={() => setReviewDocFiles(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Button className="w-full text-xs" disabled={selectedReviewerIds.length === 0 || submittingReview} onClick={confirmReviewRequest}>
-                  {submittingReview ? "Mengirim..." : `Kirim untuk Ditinjau (${selectedReviewerIds.length} peninjau)`}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </>
       )}
     </div>
@@ -558,47 +599,50 @@ interface KanbanBoardProps {
 }
 
 const KanbanBoard = ({ tasks, columns, users, canDragTask, onDragStart, onDrop, dragOverColumn, setDragOverColumn, onTaskClick }: KanbanBoardProps) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     {columns.map((col) => {
       const colTasks = tasks.filter((t) => t.status === col.status);
       return (
-        <div key={col.status} onDragOver={(e) => { e.preventDefault(); setDragOverColumn(col.status); }} onDragLeave={() => setDragOverColumn(null)} onDrop={(e) => onDrop(e, col.status)} className={`rounded-xl p-3 transition-all min-h-[220px] ${dragOverColumn === col.status ? "bg-accent ring-2 ring-primary/20 scale-[1.01]" : "bg-muted/40"}`}>
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <div className={`w-2.5 h-2.5 rounded-full ${col.accent}`} />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{col.label}</span>
-            <Badge variant="secondary" className="ml-auto text-[10px] h-5">{colTasks.length}</Badge>
+        <div key={col.status} onDragOver={(e) => { e.preventDefault(); setDragOverColumn(col.status); }} onDragLeave={() => setDragOverColumn(null)} onDrop={(e) => onDrop(e, col.status)} className={`bg-muted/10 border rounded-xl p-3 transition-all min-h-[220px] ${dragOverColumn === col.status ? "bg-accent/30 border-dashed border-foreground/30 scale-[1.01]" : "border-border"}`}>
+          <div className="flex items-center gap-2 mb-3 px-1 border-b border-border/50 pb-2">
+            <div className={`w-2 h-2 rounded-full ${col.accent}`} />
+            <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">{col.label}</span>
+            <Badge variant="secondary" className="ml-auto text-[9px] h-4 px-1.5">{colTasks.length}</Badge>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {colTasks.length === 0 ? (
-              <div className="text-center py-8"><p className="text-xs text-muted-foreground/60">{col.emptyText}</p></div>
+              <div className="text-center py-10"><p className="text-[10px] text-muted-foreground/60 italic">{col.emptyText}</p></div>
             ) : colTasks.map((task, i) => {
               const deadlineDate = new Date(task.deadline);
               const overdue = isPast(deadlineDate) && task.status !== "completed";
               const dueToday = isToday(deadlineDate);
               const draggable = canDragTask(task);
-              const hasReviewers = task.reviewers?.length > 0 && task.status === "needs-review";
               return (
-                <motion.div key={task.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} draggable={draggable} onDragStart={(e) => onDragStart(e as unknown as React.DragEvent, task.id, task)} onClick={() => onTaskClick(task)} className="ms-card-hover p-3 cursor-pointer group">
+                <motion.div key={task.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} draggable={draggable} onDragStart={(e) => onDragStart(e as unknown as React.DragEvent, task.id, task)} onClick={() => onTaskClick(task)} 
+                  className={`bg-card border shadow-sm p-3 rounded-lg cursor-pointer group hover:shadow-md hover:border-muted-foreground/30 transition-all ${draggable ? "hover:cursor-grab active:cursor-grabbing" : ""}`}>
                   <div className="flex items-start gap-2">
-                    {draggable && <GripVertical className="w-4 h-4 text-muted-foreground/20 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
-                        {task.type === "team" && <Badge variant="outline" className="text-[8px] h-4 px-1 shrink-0">Tim</Badge>}
+                    {draggable && <GripVertical className="w-4 h-4 text-muted-foreground/30 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {task.type === "team" && <Badge variant="secondary" className="text-[8px] h-4 px-1 shrink-0 bg-muted/50 font-medium">Team</Badge>}
+                        {task.priority !== "none" && (
+                          <span className={`text-[8px] px-1.5 py-0.5 rounded font-medium ${PRIORITY_STYLES[task.priority]}`}>
+                            {PRIORITY_LABELS[task.priority]}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${PRIORITY_STYLES[task.priority]}`}>
-                          <Flag className="w-2.5 h-2.5 inline mr-0.5" />{PRIORITY_LABELS[task.priority]}
-                        </span>
-                        <span className={`text-[10px] flex items-center gap-0.5 ${overdue ? "text-destructive font-medium" : dueToday ? "text-warning" : "text-muted-foreground"}`}>
-                          <Calendar className="w-2.5 h-2.5" />
+                      <p className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">{task.title}</p>
+                      
+                      <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                        <span className={`text-[9px] flex items-center gap-1 font-medium ${overdue ? "text-destructive" : dueToday ? "text-warning" : "text-muted-foreground"}`}>
+                          <Calendar className="w-3 h-3" />
                           {overdue ? "Terlambat" : formatDistanceToNow(deadlineDate, { addSuffix: true, locale: localeID })}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        {task.notes.length > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><MessageCircleCodeIcon className="w-2.5 h-2.5" /> {task.notes.length}</span>}
-                        {(task.attachments?.length || 0) > 0 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Paperclip className="w-2.5 h-2.5" /> {task.attachments.length}</span>}
-                        {hasReviewers && <Badge variant="outline" className="text-[8px] h-4 px-1"><Eye className="w-2 h-2 mr-0.5" />{task.reviewers.length} Peninjau</Badge>}
+                        
+                        <div className="flex items-center gap-2">
+                          {task.notes.length > 0 && <span className="text-[9px] text-muted-foreground flex items-center gap-1"><MessageCircleCodeIcon className="w-3 h-3" /> {task.notes.length}</span>}
+                          {(task.attachments?.length || 0) > 0 && <span className="text-[9px] text-muted-foreground flex items-center gap-1"><Paperclip className="w-3 h-3" /> {task.attachments.length}</span>}
+                        </div>
                       </div>
                     </div>
                   </div>

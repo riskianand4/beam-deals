@@ -15,7 +15,7 @@ const ICON_MAP: Record<string, any> = {
   task_completed: CheckCircle2, task_created: PlusCircle, task_assigned: UserPlus, note_added: MessageCircleCodeIcon, status_changed: ArrowRightLeft,
 };
 const COLOR_MAP: Record<string, string> = {
-  task_completed: "text-success bg-success/10", task_created: "text-primary bg-primary/10", task_assigned: "text-violet-600 bg-violet-100", note_added: "text-amber-600 bg-amber-100", status_changed: "text-cyan-600 bg-cyan-100",
+  task_completed: "text-success bg-success/10", task_created: " bg-primary/10", task_assigned: "text-violet-600 bg-violet-100", note_added: "text-amber-600 bg-amber-100", status_changed: "text-cyan-600 bg-cyan-100",
 };
 const TYPE_LABELS: Record<string, string> = {
   task_completed: "Tugas Selesai", task_created: "Tugas Dibuat", task_assigned: "Tugas Ditugaskan", note_added: "Catatan Ditambah", status_changed: "Status Berubah",
@@ -50,7 +50,7 @@ const ActivityLog = () => {
           <div className="space-y-1">
             {filteredActivities.map((activity, i) => {
               const Icon = ICON_MAP[activity.type] || PlusCircle;
-              const colorClass = COLOR_MAP[activity.type] || "text-primary bg-primary/10";
+              const colorClass = COLOR_MAP[activity.type] || " bg-primary/10";
               const actUser = users.find((u) => u.id === activity.userId);
               const initials = actUser?.name.split(" ").map((n) => n[0]).join("") ?? "?";
               return (
@@ -59,7 +59,7 @@ const ActivityLog = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground leading-snug">{activity.message}</p>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <Avatar className="w-5 h-5"><AvatarFallback className="bg-primary/10 text-primary text-[8px] font-semibold">{initials}</AvatarFallback></Avatar>
+                      <Avatar className="w-5 h-5"><AvatarFallback className="bg-primary/10  text-[8px] font-semibold">{initials}</AvatarFallback></Avatar>
                       <span className="text-[11px] text-muted-foreground">{actUser?.name} • {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true, locale: localeID })}</span>
                     </div>
                   </div>
