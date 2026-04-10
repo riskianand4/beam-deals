@@ -3,8 +3,7 @@ const mongoose = require("mongoose");
 const teamGroupSchema = new mongoose.Schema({
   name: { type: String, required: true },
   memberIds: [{ type: String }],
-  leaderId: { type: String, default: "" },
-  supervisorIds: [{ type: String }],
+  leaderIds: [{ type: String }],
   description: { type: String, default: "" },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { timestamps: true });

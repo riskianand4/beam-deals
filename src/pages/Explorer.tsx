@@ -1093,7 +1093,7 @@ const Explorer = () => {
               <Select value={linkPartnerId} onValueChange={setLinkPartnerId}>
                 <SelectTrigger className="text-xs"><SelectValue placeholder="Pilih mitra..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" className="text-xs">— Tidak disambungkan —</SelectItem>
+                  <SelectItem value="none" className="text-xs">— Tidak disambungkan —</SelectItem>
                   {partners.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.company || p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
