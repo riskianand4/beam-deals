@@ -56,7 +56,7 @@ const AdminDashboardSummary = () => {
     const completedTasks = teamTasks.filter((t) => t.status === "completed").length;
     const totalTasks = teamTasks.length;
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const leader = users.find((u) => u.id === team.leaderId);
+    const leader = users.find((u) => (team.leaderIds || []).includes(u.id));
     return { ...team, completionRate, totalTasks, completedTasks, memberCount: memberIds.length, leaderName: leader?.name || "-" };
   });
 

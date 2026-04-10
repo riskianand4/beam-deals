@@ -91,7 +91,7 @@ const Tasks = () => {
   const [teams, setTeams] = useState<TeamGroup[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(searchParams.get("teamId") || null);
   const [adminTab, setAdminTab] = useState<"employee" | "team">(searchParams.get("tab") === "employee" ? "employee" : "team");
-  const [adminViewMode, setAdminViewMode] = useState<"grid" | "table">("table");
+  const [adminViewMode, setAdminViewMode] = useState<"grid" | "table">(() => (localStorage.getItem("viewMode_tasks") as any) || "table");
   const [adminSearch, setAdminSearch] = useState("");
 
   const [employeeTasks, setEmployeeTasks] = useState<Task[]>([]);
@@ -102,6 +102,7 @@ const Tasks = () => {
   useEffect(() => {
     api.getTeams().then(setTeams).catch(() => {});
   }, []);
+  useEffect(() => { localStorage.setItem("viewMode_tasks", adminViewMode); }, [adminViewMode]);
 
   useEffect(() => {
     if (isAdmin && employeeId) {
@@ -117,12 +118,12 @@ const Tasks = () => {
 
   const isLeader = useMemo(() => {
     if (!user) return false;
-    return teams.some((t) => t.leaderId === user.id);
+    return teams.some((t) => (t.leaderIds || []).includes(user.id));
   }, [teams, user]);
 
   const leaderTeams = useMemo(() => {
     if (!user) return [];
-    return teams.filter((t) => t.leaderId === user.id);
+    return teams.filter((t) => (t.leaderIds || []).includes(user.id));
   }, [teams, user]);
 
   const allMyTasks = useMemo(() => {
@@ -334,7 +335,7 @@ const Tasks = () => {
                       {teams.filter(t => !adminSearch || t.name.toLowerCase().includes(adminSearch.toLowerCase())).map((team) => {
                         const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
                         const doneTasks = teamTasks.filter((t) => t.status === "completed").length;
-                        const leader = users.find((u) => u.id === team.leaderId);
+                        const leader = users.find((u) => (team.leaderIds || []).includes(u.id));
                         
                         return (
                           <TableRow key={team.id} className="cursor-pointer hover:bg-muted/40 transition-colors group h-10" onClick={() => setSelectedTeamId(team.id)}>
@@ -390,7 +391,7 @@ const Tasks = () => {
                   {teams.filter(t => !adminSearch || t.name.toLowerCase().includes(adminSearch.toLowerCase())).map((team, i) => {
                     const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
                     const doneTasks = teamTasks.filter((t) => t.status === "completed").length;
-                    const leader = users.find((u) => u.id === team.leaderId);
+                    const leader = users.find((u) => (team.leaderIds || []).includes(u.id));
                     
                     return (
                       <motion.div key={team.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => setSelectedTeamId(team.id)} 

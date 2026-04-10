@@ -200,7 +200,7 @@ const Vault = () => {
   const [editPass, setEditPass] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [vaultTab, setVaultTab] = useState<"pribadi" | "tim">("pribadi");
-  const [vaultViewMode, setVaultViewMode] = useState<"grid" | "table">("table");
+  const [vaultViewMode, setVaultViewMode] = useState<"grid" | "table">(() => (localStorage.getItem("viewMode_vault") as any) || "table");
 
   const togglePassword = (id: string) => {
     setVisiblePasswords((prev) => {

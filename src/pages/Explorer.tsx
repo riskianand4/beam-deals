@@ -61,7 +61,7 @@ const Explorer = () => {
   const [breadcrumb, setBreadcrumb] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => (localStorage.getItem("viewMode_explorer") as any) || "grid");
 
   // Selection
   const [selectedItem, setSelectedItem] = useState<{ type: "folder" | "file"; id: string } | null>(null);
@@ -113,6 +113,7 @@ const Explorer = () => {
   }, [currentFolderId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { localStorage.setItem("viewMode_explorer", viewMode); }, [viewMode]);
   useEffect(() => {
     api.getTeams().then(setTeams).catch(() => {});
     api.getPartners().then(setPartners).catch(() => {});
@@ -320,7 +321,8 @@ const Explorer = () => {
   const handleLinkPartner = async () => {
     if (!linkPartnerDialog) return;
     try {
-      await api.linkExplorerFolderToPartner(linkPartnerDialog.id, linkPartnerId);
+      const partnerId = linkPartnerId === "none" ? "" : linkPartnerId;
+      await api.linkExplorerFolderToPartner(linkPartnerDialog.id, partnerId);
       setLinkPartnerDialog(null);
       setLinkPartnerId("");
       refresh();
@@ -1093,7 +1095,7 @@ const Explorer = () => {
               <Select value={linkPartnerId} onValueChange={setLinkPartnerId}>
                 <SelectTrigger className="text-xs"><SelectValue placeholder="Pilih mitra..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" className="text-xs">— Tidak disambungkan —</SelectItem>
+                  <SelectItem value="none" className="text-xs">— Tidak disambungkan —</SelectItem>
                   {partners.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.company || p.name}</SelectItem>)}
                 </SelectContent>
               </Select>

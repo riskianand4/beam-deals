@@ -9,11 +9,11 @@ exports.getById = async (req, res, next) => {
 };
 
 exports.create = async (req, res, next) => {
-  try { res.status(201).json(await teamService.create(req.body)); } catch (err) { next(err); }
+  try { res.status(201).json(await teamService.create(req.body, req.user)); } catch (err) { next(err); }
 };
 
 exports.update = async (req, res, next) => {
-  try { res.json(await teamService.update(req.params.id, req.body)); } catch (err) { next(err); }
+  try { res.json(await teamService.update(req.params.id, req.body, req.user)); } catch (err) { next(err); }
 };
 
 exports.remove = async (req, res, next) => {

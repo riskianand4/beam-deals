@@ -203,7 +203,7 @@ const Payslip = () => {
   // PDF viewer
   const [viewingPdf, setViewingPdf] = useState<PayslipData | null>(null);
   const [payslipEmployeeSearch, setPayslipEmployeeSearch] = useState("");
-  const [payslipViewMode, setPayslipViewMode] = useState<"grid" | "table">("grid");
+  const [payslipViewMode, setPayslipViewMode] = useState<"grid" | "table">(() => (localStorage.getItem("viewMode_payslip") as any) || "grid");
 
   const employees = users.filter(u => u.role === "employee");
   const filteredPayslipEmployees = employees.filter(e => !payslipEmployeeSearch || e.name.toLowerCase().includes(payslipEmployeeSearch.toLowerCase()));
@@ -224,6 +224,7 @@ const Payslip = () => {
   }, [employeeId, canManage, user?.id]);
 
   useEffect(() => { fetchPayslips(); }, [fetchPayslips]);
+  useEffect(() => { localStorage.setItem("viewMode_payslip", payslipViewMode); }, [payslipViewMode]);
 
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 

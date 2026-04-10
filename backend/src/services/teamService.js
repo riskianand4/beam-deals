@@ -20,7 +20,7 @@ exports.create = async (data, requestUser) => {
     const creatorId = requestUser?.id || requestUser?._id?.toString();
     const membersToNotify = [
       ...(team.memberIds || []),
-      team.leaderId,
+      ...(team.leaderIds || []),
     ].filter(id => id && id !== creatorId);
     const uniqueIds = [...new Set(membersToNotify)];
 
@@ -31,7 +31,6 @@ exports.create = async (data, requestUser) => {
         type: "info",
         category: "team",
         sender: requestUser?.name || "Admin",
-        title: team.name,
       });
     }
   } catch (err) {
@@ -47,7 +46,7 @@ exports.update = async (id, data, requestUser) => {
 
   const prevMemberIds = new Set([
     ...(prevTeam.memberIds || []),
-    prevTeam.leaderId,
+    ...(prevTeam.leaderIds || []),
   ].filter(Boolean));
 
   const team = await TeamGroup.findByIdAndUpdate(id, data, { new: true });
@@ -58,7 +57,7 @@ exports.update = async (id, data, requestUser) => {
     const updaterId = requestUser?.id || requestUser?._id?.toString();
     const newMemberIds = [
       ...(team.memberIds || []),
-      team.leaderId,
+      ...(team.leaderIds || []),
     ].filter(id => id && !prevMemberIds.has(id) && id !== updaterId);
     const uniqueNewIds = [...new Set(newMemberIds)];
 
@@ -69,7 +68,6 @@ exports.update = async (id, data, requestUser) => {
         type: "info",
         category: "team",
         sender: requestUser?.name || "Admin",
-        title: team.name,
       });
     }
   } catch (err) {

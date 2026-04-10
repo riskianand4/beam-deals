@@ -50,7 +50,7 @@ const TeamDetail = () => {
 
   useEffect(() => { fetchTeam(); }, [fetchTeam]);
 
-  const leader = useMemo(() => team?.leaderId ? employees.find((u) => u.id === team.leaderId) : null, [team, employees]);
+  const leader = useMemo(() => team?.leaderIds?.length ? employees.find((u) => team.leaderIds!.includes(u.id)) : null, [team, employees]);
   const members = useMemo(() => team ? team.memberIds.map((id) => employees.find((u) => u.id === id)).filter(Boolean) as User[] : [], [team, employees]);
 
   const teamTasks = useMemo(() => {
@@ -130,7 +130,7 @@ const TeamDetail = () => {
               </div>
             </div>
           )}
-          {members.filter((m) => m.id !== team.leaderId).map((member) => (
+          {members.filter((m) => !(team.leaderIds || []).includes(m.id)).map((member) => (
             <div key={member.id} className="ms-card p-3 flex items-center gap-3">
               <Avatar className="w-9 h-9">
                 {member.avatar && <AvatarImage src={getUploadUrl(member.avatar)} />}
@@ -228,7 +228,7 @@ const TeamDetail = () => {
                   </Avatar>
                   <span className="text-xs font-medium text-foreground flex-1">
                     {member.name}
-                    {member.id === team.leaderId && <Crown className="w-2.5 h-2.5 text-warning inline ml-1" />}
+                    {(team.leaderIds || []).includes(member.id) && <Crown className="w-2.5 h-2.5 text-warning inline ml-1" />}
                   </span>
                   <span className="text-xs font-bold text-foreground">{mPct}%</span>
                 </div>

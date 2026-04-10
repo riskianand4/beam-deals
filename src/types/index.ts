@@ -26,6 +26,7 @@ export interface User {
   department: string;
   position: string;
   phone?: string;
+  whatsapp?: string | null;
   emergencyContact?: string;
   address?: string;
   contractType?: string;
@@ -289,8 +290,7 @@ export interface TeamGroup {
   id: string;
   name: string;
   memberIds: string[];
-  leaderId?: string;
-  supervisorIds?: string[];
+  leaderIds?: string[];
   description?: string;
   createdAt: string;
 }
