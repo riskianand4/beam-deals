@@ -83,7 +83,7 @@ const TaskDetailModal = ({ task, open, onOpenChange, teams = [] }: Props) => {
   if (!task) return null;
 
   const isTeamTask = task.type === "team";
-  const isLeaderOfTask = isTeamTask && teams.some(t => t.leaderId === user?.id && t.id === task.teamId);
+  const isLeaderOfTask = isTeamTask && teams.some(t => (t.leaderIds || []).includes(user?.id || "") && t.id === task.teamId);
   const hasTasksAccess = hasAccess("tasks");
 
   const canChangeStatus = (() => {

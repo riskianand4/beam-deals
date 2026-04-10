@@ -44,7 +44,7 @@ const MyTeam = () => {
   }, [fetchTeams]);
 
   const myTeams = useMemo(
-    () => teamGroups.filter((t) => user && (t.memberIds.includes(user.id) || (t.supervisorIds || []).includes(user.id))),
+    () => teamGroups.filter((t) => user && (t.memberIds.includes(user.id) || (t.leaderIds || []).includes(user.id))),
     [teamGroups, user],
   );
 
@@ -104,8 +104,8 @@ const MyTeam = () => {
       </h1>
 
       {myTeams.map((team, ti) => {
-        const leader = team.leaderId ? allUsers.find((u) => u.id === team.leaderId) : null;
-        const members = team.memberIds.map((id) => allUsers.find((u) => u.id === id)).filter(Boolean) as User[];
+        const leaders = (team.leaderIds || []).map((id) => allUsers.find((u) => u.id === id)).filter(Boolean);
+        const leader = leaders[0] || null;
         const counts = getTaskCounts(team.id);
         const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
         
@@ -206,7 +206,7 @@ const MyTeam = () => {
                       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                         {members.map((member) => {
                           if (!member) return null;
-                          const isLeader = team.leaderId === member.id;
+                          const isLeader = (team.leaderIds || []).includes(member.id);
                           return (
                             <div key={member.id} className="bg-background border border-border/50 rounded-lg p-2.5 flex items-center gap-3">
                               <Avatar className="w-8 h-8">
