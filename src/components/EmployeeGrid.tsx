@@ -16,7 +16,7 @@ const EmployeeGrid = ({ basePath, badgeCounts }: EmployeeGridProps) => {
   const navigate = useNavigate();
   const { users } = useAuth();
   const employees = users.filter((u) => u.role === "employee");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => (localStorage.getItem("viewMode_employees") as any) || "list");
 
   return (
     <div className="space-y-4">

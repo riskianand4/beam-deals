@@ -91,7 +91,7 @@ const Tasks = () => {
   const [teams, setTeams] = useState<TeamGroup[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(searchParams.get("teamId") || null);
   const [adminTab, setAdminTab] = useState<"employee" | "team">(searchParams.get("tab") === "employee" ? "employee" : "team");
-  const [adminViewMode, setAdminViewMode] = useState<"grid" | "table">("table");
+  const [adminViewMode, setAdminViewMode] = useState<"grid" | "table">(() => (localStorage.getItem("viewMode_tasks") as any) || "table");
   const [adminSearch, setAdminSearch] = useState("");
 
   const [employeeTasks, setEmployeeTasks] = useState<Task[]>([]);
@@ -102,6 +102,7 @@ const Tasks = () => {
   useEffect(() => {
     api.getTeams().then(setTeams).catch(() => {});
   }, []);
+  useEffect(() => { localStorage.setItem("viewMode_tasks", adminViewMode); }, [adminViewMode]);
 
   useEffect(() => {
     if (isAdmin && employeeId) {
