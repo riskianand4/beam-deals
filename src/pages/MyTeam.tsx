@@ -106,6 +106,7 @@ const MyTeam = () => {
       {myTeams.map((team, ti) => {
         const leaders = (team.leaderIds || []).map((id) => allUsers.find((u) => u.id === id)).filter(Boolean);
         const leader = leaders[0] || null;
+        const members = team.memberIds.map((id) => allUsers.find((u) => u.id === id)).filter(Boolean) as User[];
         const counts = getTaskCounts(team.id);
         const teamTasks = tasks.filter((t) => t.type === "team" && t.teamId === team.id);
         
